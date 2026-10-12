@@ -1,0 +1,17 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  // Starts the GitHub "ingest" workflow every 5 minutes (see src/index.js).
+  "name": "kestrion-cron",
+  "account_id": "623693bd9e26d8a4f91459bd23b37b8a",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // No public URL: this Worker only runs on its schedule.
+  "workers_dev": false,
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+  // Secret (set once): npx wrangler secret put GITHUB_TOKEN --config apps/cron/wrangler.jsonc
+}

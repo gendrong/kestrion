@@ -21,6 +21,7 @@
     "ingest": "npm run ingest -w @kestrion/jobs",
     "db:migrate": "npm run db:migrate -w @kestrion/web",
     "deploy": "npm run cf:deploy -w @kestrion/web",
+    "deploy:cron": "wrangler deploy --config apps/cron/wrangler.jsonc",
     "test": "npm test -w @kestrion/engine && npm test -w @kestrion/db",
     "test:e2e": "npm run test:e2e -w @kestrion/web",
     "typecheck": "npm run typecheck -w @kestrion/engine && npm run typecheck -w @kestrion/db && npm run typecheck -w @kestrion/jobs && npm run typecheck -w @kestrion/web"

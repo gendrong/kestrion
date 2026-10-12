@@ -1,0 +1,10 @@
+{
+  "name": "@kestrion/cron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that starts the GitHub ingest workflow every 5 minutes",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  }
+}

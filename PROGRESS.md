@@ -97,9 +97,14 @@
   checked: home + feed + logos + reports + queue + API + rate-limit headers work (phone screenshot checked)
 - Tests: 81 engine + 15 db unit tests, 18 Playwright smoke tests pass; typecheck clean
 
-**Left (needs the user)**
-- Install Git, create the public GitHub repo, push, add 4 Actions secrets (docs/SETUP.md), run the ingest workflow;
-  then verify "new launches appear within ~5 minutes" on the live site
+- **GitHub:** public repo https://github.com/gendrong/kestrion (commits as `gendrong` with the GitHub noreply email),
+  4 Actions secrets set by the user, CI green. First ingest run (manual, 2026-10-12 14:32 UTC): 18 of 18 new launches
+  scanned and stored, ~6 min from launch to report; cursor jumped ahead from the laptop run as designed.
+- Tuning after the first run: concurrency 3 → 5 (launch rate was ~18 per 5 min), and the scan queue now gets the first
+  90 s of every run (it was starved by launches).
+
+**Left**
+- Confirm scheduled (cron) runs keep the site within ~5–10 min of new launches over a longer period.
 
 **Known issues / limitations**
 - Public IPFS gateways (ipfs.io, dweb.link, pinata) often answer 429 to Cloudflare's IPs; filebase + 4everland work
