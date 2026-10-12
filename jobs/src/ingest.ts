@@ -47,7 +47,9 @@ const MAX_RANGE = 200_000n;
  * new launches matter most. Skipped older launches are still scanned on demand through the queue.
  */
 const MAX_LAG = BigInt(process.env.INGEST_MAX_LAG_BLOCKS ?? 18_000);
-const CONCURRENCY = Number(process.env.INGEST_CONCURRENCY ?? 3);
+const CONCURRENCY = Number(process.env.INGEST_CONCURRENCY ?? 5);
+/** Time reserved for the scan_requests queue at the start of each run, so busy launch periods don't starve it. */
+const QUEUE_FIRST_MS = Number(process.env.INGEST_QUEUE_FIRST_MS ?? 90_000);
 
 const elapsed = () => `${((Date.now() - started) / 1000).toFixed(0).padStart(4)}s`;
 const log = (msg: string) => console.log(`${elapsed()}  ${msg}`);
@@ -139,9 +141,10 @@ async function ingestFactory(db: Db, adapter: PonsAdapter, factoryId: Discovered
   });
 }
 
-async function processQueue(db: Db) {
+/** Scan requested tokens until the queue is empty, the run's budget is spent, or `untilMs` (absolute time) passes. */
+async function processQueue(db: Db, untilMs = Number.POSITIVE_INFINITY) {
   let processed = 0;
-  while (timeLeft() > 90_000) {
+  while (timeLeft() > 90_000 && Date.now() < untilMs) {
     const batch = await claimScanRequests(db, CONCURRENCY);
     if (batch.length === 0) break;
     log(`queue: scanning ${batch.length} requested token(s)`);
@@ -155,7 +158,7 @@ async function processQueue(db: Db) {
     );
     processed += batch.length;
   }
-  await setJobState(db, 'ingest:queue', { status: 'ok', error: null, stats: { processed } });
+  return processed;
 }
 
 /** D1 over the Cloudflare REST API (the job runs on GitHub, outside Cloudflare). */
@@ -177,6 +180,10 @@ async function main() {
   const latest = await ctx.rpc.getBlockNumber();
   log(`latest block ${latest}`);
 
+  // 1. Tokens people asked about on the website (bounded, so new launches still get most of the run).
+  let queued = await processQueue(db, Date.now() + QUEUE_FIRST_MS);
+
+  // 2. New launches.
   for (const f of adapter.factories) {
     try {
       await ingestFactory(db, adapter, f.id, latest);
@@ -186,7 +193,9 @@ async function main() {
       await setJobState(db, `ingest:${f.id}`, { status: 'error', error: msg.slice(0, 500) }).catch(() => {});
     }
   }
-  await processQueue(db);
+  // 3. Whatever time is left goes back to the queue.
+  queued += await processQueue(db);
+  await setJobState(db, 'ingest:queue', { status: 'ok', error: null, stats: { processed: queued } });
   log(`done (${(Date.now() - started) / 1000}s)`);
 }
 
