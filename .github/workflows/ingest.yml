@@ -1,0 +1,43 @@
+# Scans new Pons launches every 5 minutes and stores the results in Cloudflare D1.
+# Secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, CLOUDFLARE_D1_TOKEN (token with D1 Edit only), BLOCKSCOUT_API_KEY.
+# GitHub may delay scheduled runs by a few minutes when it is busy; "Run workflow" starts one by hand.
+name: ingest
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+# Never run two ingests at the same time; a new one waits for the previous one to finish.
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # Only the jobs workspace and what it depends on (engine, db), not the website.
+      - name: Install
+        run: npm ci --workspace @kestrion/jobs --include-workspace-root --no-audit --no-fund
+
+      - name: Ingest
+        run: npm run ingest
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          CLOUDFLARE_D1_TOKEN: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
+          BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
+          INGEST_TIME_BUDGET_MS: '480000'

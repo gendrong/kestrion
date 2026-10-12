@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Deployed at https://kestrion.autora.workers.dev (workers.dev subdomain of the account).
+  "name": "kestrion",
+  "account_id": "623693bd9e26d8a4f91459bd23b37b8a",
+
+  // Built by `opennextjs-cloudflare build`, not by Next directly.
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  // Database. Created 2026-10-12 with `wrangler d1 create kestrion` (region APAC).
+  // `next dev` uses a local copy (.wrangler/state); create its tables with `npx wrangler d1 migrations apply kestrion --local`.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kestrion",
+      "database_id": "ea6b1b65-5ff7-4a2c-91a0-5547fbc4801e",
+      "migrations_dir": "../../packages/db/migrations"
+    }
+  ],
+
+  // Per-IP limits (requests per 60 s). Must match LIMITS in src/lib/rateLimit.ts.
+  "ratelimits": [
+    { "name": "API_LIMITER", "namespace_id": "4663001", "simple": { "limit": 60, "period": 60 } },
+    { "name": "ENQUEUE_LIMITER", "namespace_id": "4663002", "simple": { "limit": 10, "period": 60 } },
+    { "name": "IMAGE_LIMITER", "namespace_id": "4663003", "simple": { "limit": 240, "period": 60 } }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}

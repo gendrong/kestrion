@@ -1,0 +1,28 @@
+{
+  "name": "kestrion",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Kestrion: explainable risk reports for Robinhood Chain token launches",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "jobs"
+  ],
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "scan": "tsx packages/engine/src/cli/scan.ts",
+    "dev": "npm run dev -w @kestrion/web",
+    "build": "npm run build -w @kestrion/web",
+    "start": "npm run start -w @kestrion/web",
+    "phone": "npm run phone -w @kestrion/web",
+    "ingest": "npm run ingest -w @kestrion/jobs",
+    "db:migrate": "npm run db:migrate -w @kestrion/web",
+    "deploy": "npm run cf:deploy -w @kestrion/web",
+    "test": "npm test -w @kestrion/engine && npm test -w @kestrion/db",
+    "test:e2e": "npm run test:e2e -w @kestrion/web",
+    "typecheck": "npm run typecheck -w @kestrion/engine && npm run typecheck -w @kestrion/db && npm run typecheck -w @kestrion/jobs && npm run typecheck -w @kestrion/web"
+  }
+}

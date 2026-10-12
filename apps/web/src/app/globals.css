@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* Kestrion "Paper Light" theme — CLAUDE.md §1. */
+@theme {
+  --color-paper: #f2f1ea;
+  --color-card: #ffffff;
+  --color-line: #dedbcf;
+  --color-line-soft: #efede4;
+  --color-ink: #0a0a0a;
+  --color-ink-2: #3d3b35;
+  --color-ink-3: #55534b;
+  --color-muted: #6b685e;
+  --color-neon: #c6ff00;
+
+  /* Risk + check status colors (text/background pairs keep ≥ 4.5:1 contrast). */
+  --color-low-bg: #c6ff00;
+  --color-low-fg: #0a0a0a;
+  --color-caution-bg: #ffe3ae;
+  --color-caution-fg: #6b4300;
+  --color-high-bg: #ffdad5;
+  --color-high-fg: #a3190f;
+  --color-high: #c42318;
+  --color-warn-num: #9a5b00;
+  --color-unknown-bg: #e7e5dc;
+
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+}
+
+@utility highlight {
+  background: var(--color-neon);
+  padding: 0 0.12em;
+  border-radius: 0.1em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+@utility link-neon {
+  text-decoration: underline;
+  text-decoration-color: var(--color-neon);
+  text-decoration-thickness: 3px;
+  text-underline-offset: 4px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@utility skeleton {
+  background: linear-gradient(90deg, var(--color-line-soft) 0px, #f8f7f2 120px, var(--color-line-soft) 240px);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}

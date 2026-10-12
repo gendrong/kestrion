@@ -1,0 +1,15 @@
+{
+  "name": "@kestrion/jobs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scheduled jobs (GitHub Actions): ingest new launches, process the scan queue",
+  "type": "module",
+  "scripts": {
+    "ingest": "tsx src/ingest.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kestrion/db": "*",
+    "@kestrion/engine": "*"
+  }
+}

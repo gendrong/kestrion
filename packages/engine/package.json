@@ -1,0 +1,27 @@
+{
+  "name": "@kestrion/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kestrion scanning engine: pure TypeScript, no framework code",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/chain/config.ts",
+    "./types": "./src/types.ts",
+    "./media": "./src/util/media.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.57.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
