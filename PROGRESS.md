@@ -74,7 +74,7 @@
 - Token images are not shown yet (initials avatar); image proxy/allowlist comes with token metadata in Phase 3.
 - Market cap not shown (V2 price function not verified yet).
 
-## Phase 3 — Database, live feed & deploy 🟡 (site live 2026-10-12; waiting for GitHub to run the 5-min job)
+## Phase 3 — Database, live feed & deploy ✅ (2026-10-12)
 
 **Decisions**
 - 2026-10-08: GitHub repo **public** (unlimited Actions minutes; a private repo would cost ~$50–70/month).
@@ -107,8 +107,9 @@
   **Fix (2026-10-12):** each ingest run starts the next one when it ends (≥ 5 min after it began, via `gh workflow run`
   with the built-in token). The schedule and `kestrion-cron` stay as backups; the concurrency group prevents a second chain.
 
-**Left**
-- Confirm scheduled (cron) runs keep the site within ~5–10 min of new launches over a longer period.
+- **Done-when check (2026-10-12):** ingest #2 started by hand at 16:35 UTC; #3 started by itself
+  (github-actions[bot]) at 16:40, ~5.5 min later. New V2 launches appeared on the site **~5.3–6 min** after launch
+  (e.g. QUBO launched 16:33:00, report stored 16:38:19). #2 skipped the ~2 h gap since #1 (69k blocks) as designed.
 
 **Known issues / limitations**
 - Public IPFS gateways (ipfs.io, dweb.link, pinata) often answer 429 to Cloudflare's IPs; filebase + 4everland work
@@ -122,5 +123,5 @@
 - Reports are from scan time; rescans (score changes) come in Phase 5.
 - Market cap still not shown (V2 price function not verified).
 
-## Next: finish Phase 3 deploy, then Phase 4 — Creator profiles, Today & About
+## Next: Phase 4 — Creator profiles, Today & About
 Prompt: `phases/phase-4-creator-today-about.md`
