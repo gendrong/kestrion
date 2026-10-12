@@ -1,7 +1,10 @@
 # Scans new Pons launches every 5 minutes and stores the results in Cloudflare D1.
 # Secrets (Settings → Secrets and variables → Actions):
 #   CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID, CLOUDFLARE_D1_TOKEN (token with D1 Edit only), BLOCKSCOUT_API_KEY.
-# GitHub may delay scheduled runs by a few minutes when it is busy; "Run workflow" starts one by hand.
+# Each run starts the next one when it ends (at least 5 minutes after it began), so one click on "Run workflow"
+# keeps it going. GitHub's own schedule and the kestrion-cron Worker (apps/cron) are backups that restart the
+# chain if it ever breaks. The concurrency group keeps at most one run going and one waiting, so the backups
+# never create a second chain.
 name: ingest
 
 on:
@@ -16,12 +19,16 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write # to start the next run
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Remember start time
+        run: echo "STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -41,3 +48,17 @@ jobs:
           CLOUDFLARE_D1_TOKEN: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
           BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
           INGEST_TIME_BUDGET_MS: '480000'
+
+      # Runs even when the ingest step failed, so one bad run doesn't stop the feed.
+      - name: Start the next run
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          wait=$(( STARTED_AT + 300 - $(date +%s) ))
+          if [ "$wait" -gt 0 ]; then echo "Waiting ${wait}s"; sleep "$wait"; fi
+          for i in 1 2 3; do
+            gh workflow run ingest.yml --repo "$GITHUB_REPOSITORY" --ref main && exit 0
+            sleep 10
+          done
+          exit 1

@@ -102,6 +102,10 @@
   scanned and stored, ~6 min from launch to report; cursor jumped ahead from the laptop run as designed.
 - Tuning after the first run: concurrency 3 → 5 (launch rate was ~18 per 5 min), and the scan queue now gets the first
   90 s of every run (it was starved by launches).
+- 5-minute trigger: GitHub's `schedule:` never fired on the new repo. A Cloudflare cron Worker (`apps/cron`,
+  `kestrion-cron`) was deployed, but Cloudflare never ran it in ~50 min (schedule registered, also tried every minute).
+  **Fix (2026-10-12):** each ingest run starts the next one when it ends (≥ 5 min after it began, via `gh workflow run`
+  with the built-in token). The schedule and `kestrion-cron` stay as backups; the concurrency group prevents a second chain.
 
 **Left**
 - Confirm scheduled (cron) runs keep the site within ~5–10 min of new launches over a longer period.
@@ -113,7 +117,8 @@
 - This laptop's network is flaky for some hosts (RPC, Google Fonts, Cloudflare API): deploys may need a retry.
 - Blockscout free tier: 100k credits/day. At ~1,300 launches/day × ~30–100 calls each this can get tight; tune
   `INGEST_CONCURRENCY` / `maxLinkedCandidates` if it runs out. Phase 4's own launch index will cut history calls.
-- GitHub may delay scheduled runs by a few minutes; a token can take ~5–15 min to appear.
+- If the ingest chain stops (GitHub outage, a run hitting the 15-min timeout), the backups should restart it; if not,
+  click *Run workflow* once. A token can take ~5–15 min to appear.
 - Reports are from scan time; rescans (score changes) come in Phase 5.
 - Market cap still not shown (V2 price function not verified).
 

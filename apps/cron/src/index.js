@@ -1,8 +1,8 @@
 /**
  * kestrion-cron — a tiny Cloudflare Worker whose Cron Trigger starts the GitHub "ingest" workflow every 5 minutes.
  *
- * Why: GitHub's own `schedule:` trigger is best-effort (often delayed or skipped, especially on new repositories).
- * Cloudflare Cron Triggers fire on time. The scanning itself still runs on GitHub Actions; this Worker only sends
+ * Role: backup. Each ingest run already starts the next one (.github/workflows/ingest.yml); this restarts the chain
+ * if it ever breaks. The scanning itself still runs on GitHub Actions; this Worker only sends
  * one API call (workflow_dispatch), well within the free plan's CPU limit.
  * API: https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event
  *

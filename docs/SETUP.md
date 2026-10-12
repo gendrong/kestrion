@@ -3,7 +3,9 @@
 How the pieces fit (everything on free plans):
 
 ```
-GitHub Actions (every 5 min)  ──scan──▶  Cloudflare D1 (SQLite)  ◀──read──  Cloudflare Worker (website + API)
+each ingest run ──starts──▶ the next ingest run (≥ 5 min later)   backups: GitHub schedule, kestrion-cron Worker
+
+GitHub Actions (ingest job)   ──scan──▶  Cloudflare D1 (SQLite)  ◀──read──  Cloudflare Worker (website + API)
    jobs/src/ingest.ts                     database "kestrion"                https://kestrion.autora.workers.dev
    Blockscout + RPC, D1 REST API                                             rate limits: Workers binding
 ```
@@ -16,8 +18,10 @@ the `scan_requests` queue, and the next ingest run (≤ ~5 min) scans it.
 - D1 database `kestrion` created (region APAC), tables created (`npm run db:migrate`).
 - Website deployed to https://kestrion.autora.workers.dev (`npm run deploy`).
 - Deploys use the `CLOUDFLARE_API_TOKEN` Windows user environment variable.
+- GitHub repo https://github.com/gendrong/kestrion with the 4 Actions secrets below; `kestrion-cron` deployed with
+  its `GITHUB_TOKEN` secret.
 
-## Still to do: GitHub (runs the 5-minute ingest job)
+## GitHub setup (done once, kept here for reference)
 
 1. **Install Git for Windows**: https://git-scm.com/download/win (defaults are fine), then open a new terminal.
 2. **Create a public repository** at https://github.com/new named `kestrion` (no README, no .gitignore, no license).
@@ -43,8 +47,31 @@ the `scan_requests` queue, and the next ingest run (≤ ~5 min) scans it.
    | `CLOUDFLARE_D1_TOKEN` | the token from step 4 |
    | `BLOCKSCOUT_API_KEY` | your Blockscout key (same as in `.env`) |
 
-6. **Start it**: repo → Actions → **ingest** → *Run workflow*. After that it runs every 5 minutes on its own
-   (GitHub sometimes delays scheduled runs by a few minutes).
+6. **Start it**: repo → Actions → **ingest** → *Run workflow*.
+
+## How the job keeps running every 5 minutes
+
+Each ingest run starts the next run when it ends (never sooner than 5 minutes after it began). So one click on
+*Run workflow* keeps it going; nothing else is needed. Check: GitHub → Actions → **ingest** shows a new run about
+every 5 minutes, and the last step **Start the next run** is green.
+
+If the chain ever stops (for example GitHub was down), click *Run workflow* once more. Two backups also try to
+restart it: GitHub's own `schedule:` (best effort; on this new repo it hasn't fired yet) and the
+`kestrion-cron` Worker below.
+
+### Backup trigger: kestrion-cron
+
+A tiny Cloudflare Worker (`apps/cron`) with a Cron Trigger that starts the ingest workflow every 5 minutes.
+
+1. GitHub → Settings → Developer settings → **Fine-grained tokens** → Generate new token: repository access
+   *Only select repositories → kestrion*, permission **Actions: Read and write**. Copy it.
+2. In this folder:
+   ```
+   npm run deploy:cron
+   npx wrangler secret put GITHUB_TOKEN --config apps/cron/wrangler.jsonc   (paste the token)
+   ```
+**Renew the token before it expires** (GitHub emails a reminder): make a new one and repeat the
+`wrangler secret put` command. (The main chain doesn't need this token; only the backup does.)
 
 ## Everyday commands
 
@@ -69,6 +96,7 @@ npm run dev           # website locally on http://localhost:3000 (uses a local, 
 | Service | Free limit | Our use |
 |---|---|---|
 | GitHub Actions | unlimited minutes for public repos | one ~2–8 min run every 5 min |
+| Cloudflare Workers cron | 5 cron triggers per account, 100k invocations/day | 288 invocations/day |
 | Blockscout PRO | 100,000 credits/day, 5 req/s | ~30–100 calls per scanned launch |
 | Cloudflare D1 | 5 GB, 5M rows read/day, 100k rows written/day | ~6 rows written per scan |
 | Cloudflare Workers | 100,000 requests/day, 10 ms CPU each | reads only |
