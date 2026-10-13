@@ -167,6 +167,38 @@
   wallets instead and the page redirects after the next run.
 - Share images use Latin fonts: other scripts and emoji are left out of the image (the page shows the real name).
 
-## Next: confirm on the live site, then Phase 5
-- Watch the first runs: quick scans succeed, the launch index backfill completes, credits last the whole day.
-- Confirm "clicking any creator shows their full launch history" once the index is complete.
+## Phase 5 — Accounts, watchlist & notifications 🟡 (2026-10-13: built and deployed; waiting for the live test)
+
+**Decisions**
+- "Rescan every token of the last 72h every hour" doesn't fit (~3,900 tokens/h vs ~120 scans/h the public RPC allows).
+  Rescans run **inside the ingest chain once an hour** (no second workflow competing for the RPC): every watched
+  token first, then as many recent tokens as fit (least recently scanned first). A full report is only rescanned with
+  a full scan (when the day's credits allow), so missing data never fakes a score change.
+- Wallet libraries load only when someone taps "Sign in" (first load stays ~106–120 kB JS).
+- Signature check is local (no RPC): EOA wallets only for now (smart-contract wallets / EIP-1271 not supported).
+- WalletConnect project ID (free, cloud.reown.com) not set yet: until then only wallets that inject into the page
+  (extensions, wallet apps' built-in browsers, Coinbase Wallet) can sign in. Set it in `apps/web/src/lib/site.ts`.
+
+**Done**
+- Migration `0004_accounts.sql` (siwe_nonces, sessions + indexes); `packages/db/src/tiers.ts` (Free: 5 watchlist, 3 follows)
+- SIWE sign-in (`/api/auth/nonce|verify|logout`, `/api/me`), sessions stored as SHA-256 of an HttpOnly cookie, nonces
+  single-use (10 min), same-origin check on every state-changing request
+- Watchlist (`/api/watchlist`, "Add to watchlist" on reports), follows (`/api/follow`, "Follow creator")
+- Notifications: written in the same batch as a score change for every watcher; followed creator's new launch after
+  its first scan. Header bell with unread count, `/notifications` with "Mark all as read", `/watchlist` with
+  "score changed" badges
+- Jobs: shared `jobs/src/runtime.ts`, hourly `jobs/src/rescan.ts`, change reasons ("Holders: pass → warn"),
+  `rescan-test` workflow / `npm run rescan:test -w @kestrion/jobs -- <token> [--normal]`
+- Report: score history chart (step line, table view), Rescan button (`POST /api/v1/scan/:address`, 10-min cooldown)
+- `/today` "biggest score changes" fills from score_changes automatically
+- Tests: 93 engine, 30 db, 38 Playwright. Live check with a throwaway wallet: sign-in 200 (~0.2 s), replay refused,
+  watch + follow + pages OK.
+
+**Known issues**
+- npm audit: 2 "high" (postcss at build time, `ws` in WalletConnect's Node path), not reachable from the live site.
+- Hourly rescans compete with new launches for the throttled public RPC.
+
+## Next
+- Live test of "done when": sign in, watch a token, run Actions → **rescan-test** with that token → bell shows the
+  notification. Then run it again with mode **normal**.
+- Confirm Phase 4 once the launch index is complete; then Phase 6 (public API keys, admin).
