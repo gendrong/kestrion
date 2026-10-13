@@ -2,6 +2,7 @@
 import { followCreator, TIERS, unfollowCreator } from '@kestrion/db';
 import { normalizeAddress } from '@/lib/address';
 import { getDb } from '@/lib/db';
+import { holderHint } from '@/lib/kest';
 import { rateLimit } from '@/lib/rateLimit';
 import { currentUser, sameOrigin } from '@/lib/session';
 
@@ -25,6 +26,6 @@ export async function POST(req: Request) {
     return reply(200, { following: false });
   }
   const r = await followCreator(db, user, creator);
-  if (!r.ok) return reply(409, { error: `Free accounts can follow up to ${r.limit} creators. Unfollow one first.`, limit: r.limit });
+  if (!r.ok) return reply(409, { error: `Your account can follow up to ${r.limit} creators. Unfollow one first.${user.tier === 'free' ? holderHint('more follows') : ''}`, limit: r.limit });
   return reply(200, { following: true, limit: TIERS[user.tier].follows });
 }

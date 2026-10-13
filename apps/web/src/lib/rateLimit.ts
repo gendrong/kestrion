@@ -7,10 +7,10 @@
 import 'server-only';
 import { cfEnv, type RateLimiterBinding } from './cloudflare';
 
-export type LimitKind = 'api' | 'apiKey' | 'enqueue' | 'image';
+export type LimitKind = 'api' | 'apiKey' | 'apiKeyHolder' | 'enqueue' | 'image';
 
 /** Must match wrangler.jsonc (requests per 60 s; per IP, or per key for 'apiKey'). */
-export const LIMITS: Record<LimitKind, number> = { api: 60, apiKey: 600, enqueue: 10, image: 240 };
+export const LIMITS: Record<LimitKind, number> = { api: 60, apiKey: 600, apiKeyHolder: 3000, enqueue: 10, image: 240 };
 
 /** Client IP from Cloudflare / proxy headers. */
 export function clientIp(headers: Headers): string {
@@ -35,6 +35,8 @@ export async function rateLimit(kind: LimitKind, headers: Headers, subject?: str
       ? env.API_LIMITER
       : kind === 'apiKey'
         ? env.API_KEY_LIMITER
+        : kind === 'apiKeyHolder'
+          ? env.HOLDER_KEY_LIMITER
         : kind === 'enqueue'
           ? env.ENQUEUE_LIMITER
           : env.IMAGE_LIMITER;

@@ -4,7 +4,7 @@ export { OUT_OF_CREDITS } from './explorer/blockscout';
 export { newSharedCaches, type SharedCaches } from './context';
 export { QUICK_SCAN_NO_TRACE } from './scan/collect';
 export { cleanMetadata, logoCid, safeLink, type TokenMetadata } from './util/media';
-export { LINKS } from './chain/config';
+export { KEST, LINKS } from './chain/config';
 export { NotALaunchError } from './scan/collect';
 export { isContract } from './adapters/pons/common';
 export { getLogsChunked } from './chain/logs';

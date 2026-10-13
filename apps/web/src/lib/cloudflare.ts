@@ -13,6 +13,8 @@ export interface KestrionEnv {
   IMAGE_LIMITER?: RateLimiterBinding;
   /** Per API key (higher limit than per IP). */
   API_KEY_LIMITER?: RateLimiterBinding;
+  /** Per API key of a Holder account (Phase 7). */
+  HOLDER_KEY_LIMITER?: RateLimiterBinding;
   /** Comma-separated wallet addresses allowed on /admin (wrangler.jsonc "vars"). */
   ADMIN_WALLETS?: string;
 }

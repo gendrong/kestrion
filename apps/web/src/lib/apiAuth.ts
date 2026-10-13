@@ -34,7 +34,9 @@ export async function apiAccess(req: Request): Promise<ApiAccess> {
   if (!db) return { ok: false, response: apiError(503, 'unavailable', 'The database is not configured or unreachable. Try again later.') };
   const key = await useApiKey(db, await hashToken(raw)).catch(() => null);
   if (!key) return invalid();
-  const limit = await rateLimit('apiKey', req.headers, String(key.id));
+  // Holder accounts (Phase 7) get the higher per-key limit; the tier is read live from the account.
+  const kind = key.tier === 'holder' ? 'apiKeyHolder' : 'apiKey';
+  const limit = await rateLimit(kind, req.headers, String(key.id));
   if (!limit.ok) return { ok: false, response: rateLimited(limit.headers) };
-  return { ok: true, headers: { 'X-RateLimit-Limit': String(LIMITS.apiKey), 'X-Kestrion-Access': 'api-key' }, key: { id: key.id, wallet: key.wallet } };
+  return { ok: true, headers: { 'X-RateLimit-Limit': String(LIMITS[kind]), 'X-Kestrion-Access': 'api-key' }, key: { id: key.id, wallet: key.wallet } };
 }

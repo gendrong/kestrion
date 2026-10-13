@@ -221,6 +221,17 @@
 - `ADMIN_WALLETS` in `apps/web/wrangler.jsonc` is empty until the owner's wallet address is added (then redeploy).
 - AI summaries stay off until a Gemini key is added; which models the free tier includes wasn't stated in the docs.
 
+## Phase 7 — $KEST holder perks ⏸️ prepared, switched off (2026-10-13; waits for the token launch)
+
+**Done (off until the token exists)**
+- `KEST.address` (engine chain config, `null`) and `HOLDER_MIN_KEST` (`packages/db/src/tiers.ts`, `null`): while either
+  is unset everyone stays Free and nothing reads a balance.
+- Tier rule `tierForBalance` (decimals read on-chain), Holder limits (watchlist 500, follows 200, API 3,000/min per
+  key via new binding `HOLDER_KEY_LIMITER`), balance read at sign-in (`apps/web/src/lib/kest.ts`), hourly refresh in
+  the jobs (`jobs/src/tiers.ts`), Holder hint when a Free account hits a limit, Holder limit on `/api-docs`.
+- Tests: tier rule, threshold units, Holder limits, falling back to Free (37 db tests).
+- Launch-day checklist: `docs/KEST-LAUNCH.md`.
+
 ## Next
 - Phase 5 live test by the owner (sign in → watch → Actions "rescan-test"); WalletConnect project ID.
 - Confirm Phase 4 once the launch index is complete.

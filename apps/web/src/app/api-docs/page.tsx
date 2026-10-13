@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { KeyManager } from '@/components/wallet/KeyManager';
 import { SignInPrompt } from '@/components/wallet/SignInPrompt';
 import { getDb } from '@/lib/db';
+import { HOLDER_MIN_KEST } from '@kestrion/db';
+import { kestEnabled } from '@/lib/kest';
 import { LIMITS } from '@/lib/rateLimit';
 import { currentUser } from '@/lib/session';
 import { SITE_URL } from '@/lib/site';
@@ -75,6 +77,11 @@ export default async function ApiDocsPage() {
             With a key: {LIMITS.apiKey} requests per minute per key. Send it as <code className="font-mono text-sm">Authorization: Bearer kest_…</code> (or{' '}
             <code className="font-mono text-sm">X-API-Key</code>).
           </li>
+          {kestEnabled() && (
+            <li>
+              Holder accounts (wallets holding at least {HOLDER_MIN_KEST} $KEST): {LIMITS.apiKeyHolder} requests per minute per key.
+            </li>
+          )}
           <li>Over the limit you get HTTP 429 with a <code className="font-mono text-sm">Retry-After</code> header.</li>
           <li>
             Errors always look like <code className="font-mono text-sm">{'{ "error": { "code": "invalid_address", "message": "…" } }'}</code>.

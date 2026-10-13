@@ -2,6 +2,7 @@
 import { addToWatchlist, isScanned, removeFromWatchlist, TIERS } from '@kestrion/db';
 import { normalizeAddress } from '@/lib/address';
 import { getDb } from '@/lib/db';
+import { holderHint } from '@/lib/kest';
 import { rateLimit } from '@/lib/rateLimit';
 import { currentUser, sameOrigin } from '@/lib/session';
 
@@ -26,6 +27,6 @@ export async function POST(req: Request) {
   }
   if (!(await isScanned(db, token))) return reply(409, { error: 'This token has no report yet' });
   const r = await addToWatchlist(db, user, token);
-  if (!r.ok) return reply(409, { error: `Free accounts can watch up to ${r.limit} tokens. Remove one first.`, limit: r.limit });
+  if (!r.ok) return reply(409, { error: `Your account can watch up to ${r.limit} tokens. Remove one first.${user.tier === 'free' ? holderHint('a bigger watchlist') : ''}`, limit: r.limit });
   return reply(200, { watching: true, limit: TIERS[user.tier].watchlist });
 }

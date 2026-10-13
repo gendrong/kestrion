@@ -41,6 +41,7 @@ import { getLogsChunked, isContract, PonsAdapter, TOPICS, type DiscoveredLaunch 
 import { errText } from './errors';
 import { extendIndex, indexDiscovered, launchIndexFor } from './launchIndex';
 import { processRescans, rescanDue } from './rescan';
+import { refreshHolderTiers } from './tiers';
 import { budget, env, lastError, loadBudget, log, newCtx, openDb, saveBudget, scanAndStore, started, timeLeft, type Outcome, type ScanEnv } from './runtime';
 
 /** First run only: how far back to look (blocks). ~3,000 blocks ≈ 5 minutes. */
@@ -285,6 +286,8 @@ async function main() {
   let rescanned = 0;
   if (timeLeft() > 150_000 && (await rescanDue(se))) {
     rescanned = await processRescans(se, Date.now() + Math.min(RESCAN_SLICE_MS, timeLeft() - 120_000)).catch((e) => (log(`rescan: ERROR ${errText(e)}`), 0));
+    // Phase 7: $KEST balances → tiers, hourly (no-op until the token address is set).
+    await refreshHolderTiers(db, ctx, log).catch((e) => log(`tiers: ERROR ${errText(e)}`));
   }
 
   // 6. Extend the launch index (backfill), leaving time for the queue.

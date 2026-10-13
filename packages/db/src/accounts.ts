@@ -257,3 +257,22 @@ export async function markNotificationsRead(db: Db, wallet: string, ids?: number
     ...list,
   ]);
 }
+
+// ── $KEST balances (Phase 7) ─────────────────────────────────────────────────────────────────────────────────────
+
+/** Store a freshly read $KEST balance (raw units) and the tier it earns. */
+export async function setUserBalance(db: Db, wallet: string, balanceRaw: bigint, tier: Tier): Promise<void> {
+  await db.run(`UPDATE users SET kest_balance_cached = ?, tier = ? WHERE wallet = ?`, [balanceRaw.toString(), tier, lc(wallet)]);
+}
+
+/** Users whose balance should be re-read: signed in during the last 30 days, Holders first. */
+export async function usersForBalanceRefresh(db: Db, limit = 200): Promise<{ wallet: string; tier: Tier }[]> {
+  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const rows = await db.all<{ wallet: string; tier: string }>(
+    `SELECT DISTINCT u.wallet, u.tier FROM users u JOIN sessions s ON s.user_wallet = u.wallet
+      WHERE s.last_seen_at >= ? OR u.tier = 'holder'
+      ORDER BY u.tier = 'holder' DESC LIMIT ${Math.max(1, Math.min(1000, Math.floor(limit)))}`,
+    [since],
+  );
+  return rows.map((r) => ({ wallet: r.wallet, tier: tierOf(r.tier) }));
+}

@@ -1,7 +1,8 @@
 /** POST /api/auth/verify { message, signature } — checks the signed SIWE message and starts a session (cookie). */
-import { consumeNonce, createSession, upsertUser } from '@kestrion/db';
+import { consumeNonce, createSession, setUserBalance, upsertUser } from '@kestrion/db';
 import { cookies } from 'next/headers';
 import { getDb } from '@/lib/db';
+import { kestTier } from '@/lib/kest';
 import { rateLimit } from '@/lib/rateLimit';
 import { hashToken, newSessionToken, sameOrigin, sessionCookie } from '@/lib/session';
 import { checkSiwe } from '@/lib/siwe';
@@ -23,7 +24,13 @@ export async function POST(req: Request) {
   if (!check.ok) return fail(401, `Sign-in failed: ${check.reason}`);
   if (!(await consumeNonce(db, check.nonce))) return fail(401, 'Sign-in failed: this request expired, please try again');
 
-  const user = await upsertUser(db, check.address);
+  let user = await upsertUser(db, check.address);
+  // Phase 7: the $KEST balance decides the tier (no-op while the token address isn't set).
+  const kest = await kestTier(user.wallet);
+  if (kest) {
+    await setUserBalance(db, user.wallet, kest.balance, kest.tier);
+    user = { ...user, tier: kest.tier };
+  }
   const token = newSessionToken();
   await createSession(db, user.wallet, await hashToken(token));
   (await cookies()).set(sessionCookie(token));

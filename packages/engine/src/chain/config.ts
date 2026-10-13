@@ -111,6 +111,15 @@ export const VERIFIED_TOPICS = {
 export const V2_PHASES = ['NotGraduated', 'Swept', 'PoolCreated', 'Rescued'] as const;
 
 /** Public links shown in reports. */
+/**
+ * $KEST (Phase 7). null = not launched yet: the Holder tier stays off and everyone is Free.
+ * When set: cite the source (launch tx / verified contract on https://robin.etherscan.io) next to the address.
+ * Decimals are read on-chain (decimals()), never assumed.
+ */
+export const KEST: { address: Address | null } = {
+  address: null,
+};
+
 export const LINKS = {
   /** Pons token page. Source: token links on https://www.ponsfamily.com/launchpad ("/launchpad/<address>"). */
   ponsToken: (token: string) => `https://www.ponsfamily.com/launchpad/${token}`,
