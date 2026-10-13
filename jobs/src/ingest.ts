@@ -114,6 +114,8 @@ const rpcLimiter = new RateLimiter(Number(process.env.INGEST_RPC_RPS ?? 20));
 const newCtx = () => createEngineContext(env, () => {}, { blockscoutLimiter: limiter, budget, shared, rpcLimiter });
 
 type Outcome = 'scanned' | 'skipped' | 'not_a_launch' | 'failed';
+/** Last scan error of this run (stored in job_state so failures can be diagnosed without the GitHub log). */
+let lastScanError: string | null = null;
 
 /** Per-run scan settings that need the database. */
 interface ScanEnv {
@@ -158,7 +160,8 @@ async function scanAndStore(se: ScanEnv, token: string, depth: ScanDepth, txHash
     return 'scanned';
   } catch (e) {
     if (e instanceof NotALaunchError) return 'not_a_launch';
-    log(`  ✗ ${token}: ${(e as Error).message.split('\n')[0]}`);
+    lastScanError = `${token}: ${errText(e)}`;
+    log(`  ✗ ${lastScanError}`);
     return 'failed';
   }
 }
@@ -239,6 +242,7 @@ async function ingestFactory(se: ScanEnv, adapter: PonsAdapter, factoryId: Disco
       skipped: count('skipped'),
       failed: count('failed'),
       blocksSkippedBehind: Number(skipped),
+      lastScanError,
     },
   });
   return { from, to };
