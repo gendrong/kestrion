@@ -14,6 +14,7 @@ import {
   notifyCreatorLaunch,
   OG_RETENTION_DAYS,
   recordScan,
+  saveAiSummary,
   saveCreatorSnapshot,
   saveOgImage,
   setJobState,
@@ -35,6 +36,7 @@ import {
   type LaunchIndex,
   type ScanReport,
 } from '@kestrion/engine';
+import { aiSummary } from './aiSummary';
 import { errText } from './errors';
 import { toScanRecord } from './record';
 
@@ -140,6 +142,12 @@ export async function scanAndStore(se: ScanEnv, token: string, depth: ScanDepth,
       await notifyCreatorLaunch(db, [l.creator, l.deployer, l.launchTxFrom], token, message).catch((e) => log(`  ! notify followers ${token}: ${errText(e)}`));
     }
     await storeShareImage(db, full).catch((e) => log(`  ! share image ${token}: ${errText(e)}`));
+    // Optional AI summary for full scans (off without GEMINI_API_KEY); it never changes the score.
+    if (depth === 'full') {
+      await aiSummary(full.report)
+        .then((text) => (text ? saveAiSummary(db, token, full.report.scannedAt, text) : undefined))
+        .catch((e) => log(`  ! AI summary ${token}: ${errText(e)}`));
+    }
     const moved = prev && prev.report.score !== full.report.score ? ` (was ${prev.report.score})` : '';
     log(
       `  ✓ ${full.launch.symbol.slice(0, 12).padEnd(12)} ${token}  ${depth.padEnd(5)} score ${full.report.score}${moved} (${full.report.label}) in ${((Date.now() - t0) / 1000).toFixed(0)}s`,

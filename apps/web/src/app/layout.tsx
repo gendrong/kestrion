@@ -91,6 +91,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/about" className="py-2 hover:underline">
                 How scoring works
               </Link>
+              <Link href="/api-docs" className="py-2 hover:underline">
+                API
+              </Link>
             </nav>
             <p className="text-sm font-semibold">Data, not advice. DYOR.</p>
             <p className="text-sm text-ink-2">Read-only: Kestrion never holds keys or sends transactions.</p>

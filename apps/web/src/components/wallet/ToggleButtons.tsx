@@ -71,10 +71,11 @@ export const FollowButton = ({ creator, following, signedIn }: { creator: string
   <Toggle endpoint="/api/follow" payload={{ creator }} on={following} signedIn={signedIn} labels={{ off: 'Follow creator', on: 'Following' }} />
 );
 
-export function RescanButton({ token }: { token: string }) {
+export function RescanButton({ token, signedIn }: { token: string; signedIn: boolean }) {
   const [state, setState] = useState<'idle' | 'busy' | 'queued' | 'error'>('idle');
   const [message, setMessage] = useState('');
   async function click() {
+    if (!signedIn) return requestSignIn();
     setState('busy');
     try {
       const res = await fetch(`/api/v1/scan/${token}`, { method: 'POST' });

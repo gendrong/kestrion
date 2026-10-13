@@ -198,7 +198,30 @@
 - npm audit: 2 "high" (postcss at build time, `ws` in WalletConnect's Node path), not reachable from the live site.
 - Hourly rescans compete with new launches for the throttled public RPC.
 
+## Phase 6 — Public API & admin ✅ (2026-10-13; admin wallet still to be set)
+
+**Done**
+- API keys: `kest_` + 32 random bytes, shown once, stored as SHA-256 + a 9-character prefix; max 5 per account;
+  `last_used` updated at most every 5 min. Key management on `/api-docs` (create / list / revoke).
+- Limits (`apps/web/src/lib/rateLimit.ts` + `wrangler.jsonc`): no key 60/min per IP, API key 600/min per key
+  (new binding `API_KEY_LIMITER`). Keys via `Authorization: Bearer` or `X-API-Key`; bad key = 401 `invalid_api_key`.
+- `POST /api/v1/scan/:address` now needs an API key or a signed-in session (website Rescan button).
+- "Flag this report" (signed-in, rate-limited, one open flag per user/token/type), `/admin` (only `ADMIN_WALLETS`):
+  counts, job health with errors, score distribution chart, trigger rescans, review flags.
+- Optional AI summaries (`jobs/src/aiSummary.ts`): Gemini `generateContent`, only from the check JSON, banned-words
+  and must-mention-the-score guards, full scans only, ≤10 per run, stored in `scans.ai_summary`; off without
+  `GEMINI_API_KEY` (GitHub secret).
+- `/api-docs` with curl + JS examples; `examples/fetch-report.mjs`.
+- Migration `0005_api_keys_flags.sql`. Tests: 93 engine, 34 db, 46 Playwright.
+- **Done-when check (live):** `KESTRION_API_KEY=… node examples/fetch-report.mjs` → `access: api-key (limit 600/min)`,
+  launches + full report printed. Also checked: flag 200, rescan without auth 401 / with key 202, /admin 404 for
+  non-admins. Test wallet and its data deleted afterwards.
+
+**Left / known issues**
+- `ADMIN_WALLETS` in `apps/web/wrangler.jsonc` is empty until the owner's wallet address is added (then redeploy).
+- AI summaries stay off until a Gemini key is added; which models the free tier includes wasn't stated in the docs.
+
 ## Next
-- Live test of "done when": sign in, watch a token, run Actions → **rescan-test** with that token → bell shows the
-  notification. Then run it again with mode **normal**.
-- Confirm Phase 4 once the launch index is complete; then Phase 6 (public API keys, admin).
+- Phase 5 live test by the owner (sign in → watch → Actions "rescan-test"); WalletConnect project ID.
+- Confirm Phase 4 once the launch index is complete.
+- Phase 7 ($KEST holder perks) waits for the token launch; Phase 8 = more launchpads.

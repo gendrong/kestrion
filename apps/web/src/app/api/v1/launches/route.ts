@@ -5,14 +5,16 @@
  */
 import { getFeed, parseFeedQuery } from '@kestrion/db';
 import { apiData, apiError, corsPreflight, dbUnavailable, rateLimited } from '@/lib/apiResponse';
+import { apiAccess } from '@/lib/apiAuth';
 import { getDb } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
-  const limit = await rateLimit('api', req.headers);
-  if (!limit.ok) return rateLimited(limit.headers);
+  const access = await apiAccess(req);
+  if (!access.ok) return access.response;
+  const limit = access;
   const db = getDb();
   if (!db) return dbUnavailable();
   const q = parseFeedQuery(new URL(req.url).searchParams);

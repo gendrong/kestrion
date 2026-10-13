@@ -6,7 +6,7 @@ Read-only: Kestrion never holds keys and never sends transactions. **Data, not a
 The full product spec is in [CLAUDE.md](CLAUDE.md); progress is in [PROGRESS.md](PROGRESS.md);
 verified chain facts are in [docs/chain-research.md](docs/chain-research.md).
 
-## What works today (Phase 5)
+## What works today (Phase 6)
 
 - **Ingest job** (`jobs/`, GitHub Actions every 5 min): scans every new Pons launch and stores it in Cloudflare D1,
   updates the creator's profile, and renders a share image (PNG) for each recent launch.
@@ -22,7 +22,9 @@ verified chain facts are in [docs/chain-research.md](docs/chain-research.md).
   notifications (bell icon) when a watched token's score changes or a followed creator launches; `/watchlist`,
   `/notifications`. Hourly rescans run inside the ingest job.
 - **Public API**: `GET /api/v1/token/<address>`, `GET /api/v1/creator/<address>`, `GET /api/v1/launches`,
-  `POST /api/v1/scan/<address>` (request a rescan),
+  `POST /api/v1/scan/<address>` (request a rescan, needs a key or sign-in). Docs + API keys: `/api-docs`;
+  example: `KESTRION_API_KEY=kest_… node examples/fetch-report.mjs`. Admin: `/admin` (wallets in `ADMIN_WALLETS`).
+  Optional AI summaries with a `GEMINI_API_KEY` GitHub secret.
   rate-limited per IP (Cloudflare binding).
 - **Share images**: `/og/<address>` (rendered by the job, stored in D1, kept 14 days; older tokens use
   `apps/web/public/og-default.png`, regenerate it with `npm run og:default -w @kestrion/jobs`).

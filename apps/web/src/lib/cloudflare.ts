@@ -11,6 +11,10 @@ export interface KestrionEnv {
   API_LIMITER?: RateLimiterBinding;
   ENQUEUE_LIMITER?: RateLimiterBinding;
   IMAGE_LIMITER?: RateLimiterBinding;
+  /** Per API key (higher limit than per IP). */
+  API_KEY_LIMITER?: RateLimiterBinding;
+  /** Comma-separated wallet addresses allowed on /admin (wrangler.jsonc "vars"). */
+  ADMIN_WALLETS?: string;
 }
 
 /** Cloudflare bindings, or {} when not running on Workers (e.g. plain `next start`). */

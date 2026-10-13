@@ -20,6 +20,8 @@ export function Report({
   fullScanQueued = false,
   actions,
   history,
+  flag,
+  aiSummary,
 }: {
   report: ScanReport;
   fullScanQueued?: boolean;
@@ -27,6 +29,10 @@ export function Report({
   actions?: React.ReactNode;
   /** Score history chart. */
   history?: React.ReactNode;
+  /** "Flag this report". */
+  flag?: React.ReactNode;
+  /** Optional LLM summary written from the check results only. */
+  aiSummary?: string | null;
 }) {
   const quick = report.scanDepth === 'quick';
   const style = LABEL_STYLE[report.label];
@@ -67,6 +73,12 @@ export function Report({
             <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${report.score}%` }} />
           </div>
           <p className="text-[17px] leading-relaxed text-ink-2">{report.summary}</p>
+          {aiSummary && (
+            <div className="rounded-xl border border-line p-3">
+              <p className="text-[15px] leading-relaxed text-ink-2">{aiSummary}</p>
+              <p className="mt-1 text-xs text-muted">Plain-language summary written by an AI from the check results above. It never changes the score.</p>
+            </div>
+          )}
           {quick && (
             <p className="rounded-xl bg-paper p-3 text-sm text-ink-2">
               <strong className="text-ink">Quick scan.</strong> Every launch gets one within minutes. The funding of early
@@ -100,6 +112,7 @@ export function Report({
             <External href={LINKS.explorerToken(report.token.address)}>Explorer</External>
           </div>
           {actions && <div className="flex flex-wrap items-start gap-3 border-t border-line-soft pt-4">{actions}</div>}
+          {flag && <div className="-mb-2">{flag}</div>}
           <div className="border-t border-line-soft pt-4">
             <ShareButton
               url={`${SITE_URL}/t/${report.token.address.toLowerCase()}`}

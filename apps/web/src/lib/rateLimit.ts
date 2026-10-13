@@ -7,10 +7,10 @@
 import 'server-only';
 import { cfEnv, type RateLimiterBinding } from './cloudflare';
 
-export type LimitKind = 'api' | 'enqueue' | 'image';
+export type LimitKind = 'api' | 'apiKey' | 'enqueue' | 'image';
 
-/** Must match wrangler.jsonc (requests per 60 s per IP). */
-export const LIMITS: Record<LimitKind, number> = { api: 60, enqueue: 10, image: 240 };
+/** Must match wrangler.jsonc (requests per 60 s; per IP, or per key for 'apiKey'). */
+export const LIMITS: Record<LimitKind, number> = { api: 60, apiKey: 600, enqueue: 10, image: 240 };
 
 /** Client IP from Cloudflare / proxy headers. */
 export function clientIp(headers: Headers): string {
@@ -27,13 +27,20 @@ export interface LimitResult {
   headers: Record<string, string>;
 }
 
-export async function rateLimit(kind: LimitKind, headers: Headers): Promise<LimitResult> {
+/** `subject` replaces the client IP as the counter key (e.g. an API key id). */
+export async function rateLimit(kind: LimitKind, headers: Headers, subject?: string): Promise<LimitResult> {
   const env = cfEnv();
   const binding: RateLimiterBinding | undefined =
-    kind === 'api' ? env.API_LIMITER : kind === 'enqueue' ? env.ENQUEUE_LIMITER : env.IMAGE_LIMITER;
+    kind === 'api'
+      ? env.API_LIMITER
+      : kind === 'apiKey'
+        ? env.API_KEY_LIMITER
+        : kind === 'enqueue'
+          ? env.ENQUEUE_LIMITER
+          : env.IMAGE_LIMITER;
   if (!binding) return { ok: true, headers: {} };
   try {
-    const { success } = await binding.limit({ key: `${kind}:${clientIp(headers)}` });
+    const { success } = await binding.limit({ key: `${kind}:${subject ?? clientIp(headers)}` });
     return success
       ? { ok: true, headers: { 'X-RateLimit-Limit': String(LIMITS[kind]) } }
       : { ok: false, headers: { 'X-RateLimit-Limit': String(LIMITS[kind]), 'Retry-After': '60' } };

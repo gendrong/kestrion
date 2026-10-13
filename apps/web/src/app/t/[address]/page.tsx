@@ -1,5 +1,6 @@
 import type { ScanReport } from '@kestrion/engine/types';
-import { enqueueScan, getLatestScan, getScoreHistory, isKnownCreator, isWatching, WALLET_MARK } from '@kestrion/db';
+import { enqueueScan, getAiSummary, getLatestScan, getScoreHistory, isKnownCreator, isWatching, WALLET_MARK } from '@kestrion/db';
+import { FlagButton } from '@/components/report/FlagButton';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -82,7 +83,11 @@ async function Body({ address }: { address: string | null }) {
     if (latest.report.scanDepth === 'quick' && (await rateLimit('enqueue', await headers())).ok) {
       fullScanQueued = await enqueueScan(db, address, 'full').then(() => true, () => false);
     }
-    const [user, history] = await Promise.all([currentUser(db), getScoreHistory(db, address).catch(() => [])]);
+    const [user, history, aiSummary] = await Promise.all([
+      currentUser(db),
+      getScoreHistory(db, address).catch(() => []),
+      getAiSummary(db, address).catch(() => null),
+    ]);
     const watching = user ? await isWatching(db, user.wallet, address) : false;
     return (
       <Report
@@ -91,10 +96,12 @@ async function Body({ address }: { address: string | null }) {
         actions={
           <>
             <WatchButton token={address} watching={watching} signedIn={!!user} />
-            <RescanButton token={address} />
+            <RescanButton token={address} signedIn={!!user} />
           </>
         }
         history={<ScoreHistory points={history} />}
+        flag={<FlagButton token={address} signedIn={!!user} />}
+        aiSummary={aiSummary}
       />
     );
   }

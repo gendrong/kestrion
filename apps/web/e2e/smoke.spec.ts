@@ -152,3 +152,32 @@ test('rescan API validates the address', async ({ request }) => {
   expect(res.status()).toBe(400);
   expect((await res.json()).error.code).toBe('invalid_address');
 });
+
+// Phase 6: public API keys, flags, admin.
+
+test('API docs explain access and offer key management', async ({ page }) => {
+  await page.goto('/api-docs');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Reports as');
+  await expect(page.getByText('/api/v1/token/:address')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in with your wallet' })).toBeVisible();
+});
+
+test('admin is hidden from everyone who is not an admin', async ({ request }) => {
+  expect((await request.get('/admin')).status()).toBe(404);
+});
+
+test('API keys: a bad key is refused, anonymous access still works', async ({ request }) => {
+  const bad = await request.get('/api/v1/launches?limit=1', { headers: { Authorization: 'Bearer kest_' + 'x'.repeat(43) } });
+  expect([401, 503]).toContain(bad.status()); // 503 only when the local build has no database
+  const malformed = await request.get('/api/v1/launches?limit=1', { headers: { 'X-API-Key': 'nope' } });
+  expect(malformed.status()).toBe(401);
+  expect((await malformed.json()).error.code).toBe('invalid_api_key');
+  const anon = await request.get('/api/v1/token/hello');
+  expect(anon.status()).toBe(400);
+});
+
+test('rescans and key management need sign-in or a key', async ({ request }) => {
+  expect([401, 503]).toContain((await request.post('/api/v1/scan/0x' + '1'.repeat(40))).status());
+  expect((await request.get('/api/keys')).status()).toBe(401);
+  expect((await request.post('/api/flags', { data: { token: '0x' + '1'.repeat(40), type: 'missed_risk' } })).status()).toBe(403);
+});

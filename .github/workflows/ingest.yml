@@ -47,6 +47,8 @@ jobs:
           D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
           CLOUDFLARE_D1_TOKEN: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
           BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}
+          # Optional: plain-language AI summaries for full scans (empty secret = feature off).
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           INGEST_TIME_BUDGET_MS: '480000'
 
       # Runs even when the ingest step failed, so one bad run doesn't stop the feed.
