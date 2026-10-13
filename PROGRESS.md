@@ -147,7 +147,18 @@
 - The free Blockscout tier (100k credits/day, ~20 credits per call ≈ 5,000 calls/day, resets 00:00 UTC) ran out at
   ~03:30 UTC. A full scan uses ~30 calls, so the free tier covers ~160 scans/day, but Pons has ~1,300 launches/day.
   Since then every scan fails (`Out of credits`) and the feed stops at 03:30 until the daily reset.
-  Paid plans start at $49/month (over budget). Needs a decision: see "Next".
+  Paid plans start at $49/month (over budget).
+- **Decision (2026-10-13): quick + full scans** (engine 0.2.0, migration `0003_launch_index_depth.sql`):
+  - Credit budget shared by a run, read from `x-credits-remaining` (kept in job_state `explorer:credits`); no
+    explorer calls once used up (checks become unknown instead of the scan failing).
+  - **Quick scan** for every launch: launch tx from the factory event, curve/trades/exemptions/holders/flows from the
+    free RPC, the creator wallet only (stored profiles reused: repeat creators cost nothing), no early-buyer funding
+    traces (cluster buy shows unknown unless the creator's own buys already warn), no prior-launch outcomes.
+  - **Full scan** (the old scan) for tokens someone opens on the website and launches gaining traction (≥ 10 buys
+    from ≥ 6 wallets in one run), only from credits that quick scans won't need before the 00:00 UTC reset.
+  - `launch_index`: every Pons launch from the factories' events over the free RPC, backfilled ~2 min per run;
+    creator history, wallet lookups and creator pages read it instead of explorer searches.
+  - Reports show "Quick scan" / "Full scan".
 
 **Known issues / limitations**
 - Creators scanned before Phase 4 have no stored launch history yet; their page shows the scanned tokens and
@@ -156,6 +167,6 @@
   wallets instead and the page redirects after the next run.
 - Share images use Latin fonts: other scripts and emoji are left out of the image (the page shows the real name).
 
-## Next: fix the explorer budget, then finish Phase 4 checks
-Use far fewer explorer calls per launch (details in the chat of 2026-10-13), then confirm "clicking any creator shows
-their full launch history" on the live site.
+## Next: confirm on the live site, then Phase 5
+- Watch the first runs: quick scans succeed, the launch index backfill completes, credits last the whole day.
+- Confirm "clicking any creator shows their full launch history" once the index is complete.

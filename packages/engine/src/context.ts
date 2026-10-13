@@ -44,6 +44,8 @@ export function createEngineContext(
     blockscoutLimiter?: RateLimiter;
     /** Share the explorer credit budget the same way. */
     budget?: CreditBudget;
+    /** Rate limit for the primary (public) RPC, shared by parallel scans. */
+    rpcLimiter?: RateLimiter;
     shared?: SharedCaches;
   } = {},
 ): EngineContext {
@@ -51,7 +53,7 @@ export function createEngineContext(
   // One limiter for everything that hits Blockscout (REST + JSON-RPC share the 5 req/s budget).
   const blockscoutLimiter = opts.blockscoutLimiter ?? new RateLimiter(BLOCKSCOUT.requestsPerSecond);
 
-  const endpoints: RpcEndpoint[] = [{ name: 'public RPC', url: env.RPC_URL?.trim() || RPC.publicUrl }];
+  const endpoints: RpcEndpoint[] = [{ name: 'public RPC', url: env.RPC_URL?.trim() || RPC.publicUrl, limiter: opts.rpcLimiter }];
   const fallbackUrl = env.FALLBACK_RPC_URL?.trim() || (key ? RPC.blockscoutUrl(key) : undefined);
   if (fallbackUrl) {
     endpoints.push({

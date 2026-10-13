@@ -149,7 +149,8 @@ async function loadHolders(ctx: EngineContext, launch: LaunchInfo, ledger: Trans
     return ctx.explorer.tokenHolders(launch.token);
   }
   const skip = new Set(excluded.map((a) => a.toLowerCase()));
-  const top = ledgerHolders(ledger).slice(0, 50);
+  // The report lists the top 10 real holders; 20 leaves room for the curve, pool and burn addresses it skips.
+  const top = ledgerHolders(ledger).slice(0, 20);
   let lookups = 0;
   return mapLimit(top, 6, async (h) => {
     const contract = await isContract(ctx, h.address).catch(() => false);

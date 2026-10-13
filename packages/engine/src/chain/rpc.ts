@@ -104,6 +104,8 @@ export function createFailoverRpc(endpoints: RpcEndpoint[], opts: { timeoutMs?: 
     // Healthy endpoints first (in configured order), parked ones last.
     const order = [...states].sort((a, b) => Number(a.downUntil > now) - Number(b.downUntil > now));
     let lastError: unknown;
+    // Every endpoint's error, so a failure shows what the primary RPC said (not just the fallback's answer).
+    const errors: string[] = [];
     for (const ep of order) {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
@@ -112,6 +114,7 @@ export function createFailoverRpc(endpoints: RpcEndpoint[], opts: { timeoutMs?: 
           return result;
         } catch (e) {
           lastError = e;
+          if (attempt === 0) errors.push((e as Error).message);
           if (e instanceof RpcResponseError) {
             if (isDeterministic(e)) throw e;
             ep.failures++;
@@ -123,13 +126,15 @@ export function createFailoverRpc(endpoints: RpcEndpoint[], opts: { timeoutMs?: 
               await sleep(600 * 2 ** attempt);
               continue;
             }
-            ep.downUntil = Date.now() + 60_000;
+            // 402 = the fallback's credits are used up for the day: park it longer.
+            ep.downUntil = Date.now() + (e.status === 402 ? 15 * 60_000 : 60_000);
             break;
           }
           throw e;
         }
       }
     }
+    if (errors.length > 1) throw new RpcHttpError(`All RPC endpoints failed (${method}): ${errors.join(' | ')}`);
     throw lastError ?? new RpcHttpError('All RPC endpoints failed');
   }
 
