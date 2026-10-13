@@ -8,9 +8,9 @@ import { getJobState, insertLaunches, launchesByDeployers, setJobState, type Db,
 import type { DiscoveredLaunch, EngineContext, LaunchIndex, PonsAdapter, PriorLaunchRef } from '@kestrion/engine';
 import { errText } from './errors';
 
-/** Blocks per step (the RPC answers ≤ 20k per eth_getLogs, so ~10 calls), and steps read in parallel. */
+/** Blocks per step (the RPC answers ≤ 20k per eth_getLogs, so ~10 calls), and steps read in parallel (1: the public RPC answers 403 to bursts). */
 const WINDOW = 200_000n;
-const PARALLEL = 4;
+const PARALLEL = 1;
 /** A factory counts as fully indexed when its cursor is this close to the head (one run's worth of blocks). */
 const CAUGHT_UP = 30_000n;
 
