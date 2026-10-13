@@ -69,4 +69,5 @@ export interface FeedItem {
   label: string | null;
   lastScannedAt: string | null;
   factory: string;
+  creator: string;
 }

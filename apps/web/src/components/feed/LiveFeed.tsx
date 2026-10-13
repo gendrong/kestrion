@@ -4,7 +4,7 @@ import type { FeedItem, PairFilter, RiskFilter, SortOrder, Stage } from '@kestri
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TokenAvatar } from '@/components/TokenAvatar';
-import { LABEL_STYLE } from '@/lib/format';
+import { LABEL_STYLE, shortAddr } from '@/lib/format';
 
 type Filters = { stage: Stage | 'all'; pair: PairFilter | 'all'; risk: RiskFilter | 'all'; sort: SortOrder };
 
@@ -148,21 +148,30 @@ export function LiveFeed({ initial, initialNow }: { initial: FeedItem[]; initial
               const style = t.label ? LABEL_STYLE[t.label as keyof typeof LABEL_STYLE] : undefined;
               const progress = t.graduated ? 100 : Math.max(0, Math.min(100, t.curveProgress ?? 0));
               return (
-                <li key={t.address} className="border-b border-[#F3F1EA] last:border-b-0">
-                  <Link
-                    href={`/t/${t.address}`}
-                    className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 hover:bg-paper/60 sm:px-6 md:grid-cols-[minmax(220px,2.2fr)_70px_110px_minmax(150px,1.4fr)_150px]"
-                  >
+                // The token link covers the whole row (::after); the creator link sits above it.
+                <li key={t.address} className="relative border-b border-[#F3F1EA] last:border-b-0 hover:bg-paper/60">
+                  <div className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 sm:px-6 md:grid-cols-[minmax(220px,2.2fr)_70px_110px_minmax(150px,1.4fr)_150px]">
                     <span className="flex min-w-0 items-center gap-3">
                       <TokenAvatar name={t.name} logoCid={t.logoCid} />
                       <span className="min-w-0">
-                        <span className="block truncate font-semibold">{t.name || 'Unnamed'}</span>
-                        <span className="block text-[13px] text-muted">
+                        <Link href={`/t/${t.address}`} className="block truncate font-semibold after:absolute after:inset-0 after:content-['']">
+                          {t.name || 'Unnamed'}
+                        </Link>
+                        <span className="block truncate text-[13px] text-muted">
                           ${t.symbol}
                           <span className="md:hidden">
                             {' '}
                             · <span suppressHydrationWarning>{age(t.launchTime, now)}</span> · {t.pairSymbol}
                           </span>
+                          {t.creator && (
+                            <>
+                              {' '}
+                              · by{' '}
+                              <Link href={`/creator/${t.creator}`} className="relative z-10 underline decoration-line underline-offset-2 hover:text-ink">
+                                {shortAddr(t.creator)}
+                              </Link>
+                            </>
+                          )}
                         </span>
                       </span>
                     </span>
@@ -181,7 +190,7 @@ export function LiveFeed({ initial, initialNow }: { initial: FeedItem[]; initial
                     <span className={`justify-self-end rounded-full px-3 py-1.5 text-sm font-bold md:justify-self-start ${style?.badge ?? 'bg-unknown-bg text-ink-2'}`}>
                       <span className="font-display">{t.score ?? '–'}</span> {t.label ?? 'Pending'}
                     </span>
-                  </Link>
+                  </div>
                 </li>
               );
             })}

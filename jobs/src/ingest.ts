@@ -3,6 +3,8 @@
  *
  * 1. For each factory: read launch events since the last processed block, scan each new token, store it.
  * 2. Then work through the scan_requests queue (tokens people asked about on the website).
+ * 3. Wallet lookups (creator_requests): find a wallet's launches on-chain and queue the newest ones for scanning.
+ * Every scan also updates the creator's profile (creators table) and, for recent launches, renders a share image.
  *
  * Idempotent: the last processed block is stored per factory in job_state, already-scanned tokens are skipped,
  * and a failed scan is put on the queue to be retried. Stops starting new work when the time budget runs out.
@@ -11,24 +13,34 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  claimCreatorRequests,
   claimScanRequests,
   createD1HttpClient,
+  enqueueCreatorLookup,
   enqueueScan,
+  finishCreatorRequest,
   finishScanRequest,
   getJobState,
   isScanned,
+  OG_RETENTION_DAYS,
+  WALLET_MARK,
+  pruneOgImages,
   recordScan,
+  saveCreatorSnapshot,
+  saveOgImage,
   setJobState,
   type Db,
 } from '@kestrion/db';
 import {
   BLOCKSCOUT,
   createEngineContext,
+  isContract,
   NotALaunchError,
   PonsAdapter,
   RateLimiter,
   scanTokenFull,
   type DiscoveredLaunch,
+  type FullScan,
 } from '@kestrion/engine';
 import { toScanRecord } from './record';
 
@@ -50,6 +62,10 @@ const MAX_LAG = BigInt(process.env.INGEST_MAX_LAG_BLOCKS ?? 18_000);
 const CONCURRENCY = Number(process.env.INGEST_CONCURRENCY ?? 5);
 /** Time reserved for the scan_requests queue at the start of each run, so busy launch periods don't starve it. */
 const QUEUE_FIRST_MS = Number(process.env.INGEST_QUEUE_FIRST_MS ?? 90_000);
+/** Wallet lookups per run, and how many of a looked-up wallet's newest launches get queued for a full scan. */
+const CREATOR_LOOKUPS_PER_RUN = 5;
+const CREATOR_LOOKUP_SCANS = 3;
+const FACTORY_NAME: Record<string, string> = { 'pons-v2': 'Pons V2', 'pons-v1-active': 'Pons V1', 'pons-v1-legacy': 'Pons V1 (legacy)' };
 
 const elapsed = () => `${((Date.now() - started) / 1000).toFixed(0).padStart(4)}s`;
 const log = (msg: string) => console.log(`${elapsed()}  ${msg}`);
@@ -70,6 +86,9 @@ async function scanAndStore(db: Db, token: string): Promise<Outcome> {
   try {
     const full = await scanTokenFull(newCtx(), token);
     await recordScan(db, toScanRecord(full));
+    // Extras: a failure here never fails the scan itself.
+    await saveCreatorSnapshot(db, full.creator, token, full.report.scannedAt).catch((e) => log(`  ! creator profile ${token}: ${(e as Error).message}`));
+    await storeShareImage(db, full).catch((e) => log(`  ! share image ${token}: ${(e as Error).message}`));
     log(`  ✓ ${full.launch.symbol.padEnd(12)} ${token}  score ${full.report.score} (${full.report.label}) in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
     return 'scanned';
   } catch (e) {
@@ -77,6 +96,22 @@ async function scanAndStore(db: Db, token: string): Promise<Outcome> {
     log(`  ✗ ${token}: ${(e as Error).message.split('\n')[0]}`);
     return 'failed';
   }
+}
+
+/** Render and store the share image of a recent launch (older ones use the site's default image). */
+async function storeShareImage(db: Db, full: FullScan) {
+  const { report, launch } = full;
+  if (Date.now() - launch.launchTime * 1000 > OG_RETENTION_DAYS * 86_400_000) return;
+  // Loaded on first use: if the image libraries ever fail to load, only share images are affected, not scanning.
+  const { renderTokenOg } = await import('./og');
+  const png = await renderTokenOg({
+    name: report.token.name,
+    symbol: report.token.symbol,
+    score: report.score,
+    label: report.label,
+    subtitle: `${FACTORY_NAME[launch.factoryId] ?? 'Pons'} · ${launch.pairSymbol || launch.pairType} pair`,
+  });
+  await saveOgImage(db, launch.token, report.scannedAt, png.toString('base64'));
 }
 
 /** Run `fn` over items with limited concurrency, stopping new work when the budget is spent. */
@@ -152,13 +187,69 @@ async function processQueue(db: Db, untilMs = Number.POSITIVE_INFINITY) {
       batch.map(async (r) => {
         const outcome = await scanAndStore(db, r.token);
         if (outcome === 'scanned') return; // record_scan() marks the request done
-        if (outcome === 'not_a_launch') return finishScanRequest(db, r.token, 'not_a_launch', 'Not a Pons launch');
+        if (outcome === 'not_a_launch') {
+          // Someone pasted a wallet into the token search: look up its launches instead (the page then redirects).
+          const wallet = await isContract(newCtx(), r.token as `0x${string}`).then((c) => !c, () => false);
+          if (wallet) await enqueueCreatorLookup(db, r.token).catch(() => {});
+          return finishScanRequest(db, r.token, 'not_a_launch', wallet ? WALLET_MARK : 'Not a Pons launch');
+        }
         await finishScanRequest(db, r.token, r.attempts >= 3 ? 'failed' : 'queued', 'Scan failed; will retry');
       }),
     );
     processed += batch.length;
   }
   return processed;
+}
+
+/**
+ * Wallet lookups from the website: search the wallet's Pons launches on-chain, store the list right away
+ * (the creator page can show it), and queue the newest few for a full scan (which fills in scores and details).
+ */
+async function processCreatorLookups(db: Db, adapter: PonsAdapter) {
+  const batch = await claimCreatorRequests(db, CREATOR_LOOKUPS_PER_RUN);
+  for (const r of batch) {
+    try {
+      const { refs, partial } = await adapter.findLaunchesByCreator([r.address as `0x${string}`]);
+      if (refs.length === 0) {
+        await finishCreatorRequest(db, r.address, 'no_launches');
+        log(`wallet ${r.address}: no Pons launches`);
+        continue;
+      }
+      const newest = [...refs].sort((a, b) => (a.launchBlock > b.launchBlock ? -1 : 1));
+      await saveCreatorSnapshot(
+        db,
+        {
+          address: r.address,
+          firstSeen: null,
+          fundingSource: null,
+          funder: null,
+          funderLabel: null,
+          launches: newest.map((l) => ({
+            token: l.token,
+            factoryId: l.factoryId,
+            launchBlock: l.launchBlock.toString(),
+            launchTime: l.launchTime !== undefined ? new Date(l.launchTime * 1000).toISOString() : null,
+          })),
+          searchPartial: partial,
+          linkedWallets: null,
+        },
+        newest[0]!.token,
+      );
+      let queued = 0;
+      for (const l of newest) {
+        if (queued >= CREATOR_LOOKUP_SCANS) break;
+        if (await isScanned(db, l.token)) continue;
+        await enqueueScan(db, l.token);
+        queued++;
+      }
+      log(`wallet ${r.address}: ${refs.length} launch(es), ${queued} queued for scanning`);
+    } catch (e) {
+      const msg = (e as Error).message.split('\n')[0] ?? 'failed';
+      log(`wallet ${r.address}: ERROR ${msg}`);
+      await finishCreatorRequest(db, r.address, r.attempts >= 3 ? 'failed' : 'queued', msg).catch(() => {});
+    }
+  }
+  return batch.length;
 }
 
 /** D1 over the Cloudflare REST API (the job runs on GitHub, outside Cloudflare). */
@@ -180,10 +271,13 @@ async function main() {
   const latest = await ctx.rpc.getBlockNumber();
   log(`latest block ${latest}`);
 
-  // 1. Tokens people asked about on the website (bounded, so new launches still get most of the run).
+  // 1. Wallets people looked up (quick: a few log searches each), so their launches join this run's queue.
+  const lookups = await processCreatorLookups(db, adapter).catch((e) => (log(`wallet lookups: ERROR ${(e as Error).message}`), 0));
+
+  // 2. Tokens people asked about on the website (bounded, so new launches still get most of the run).
   let queued = await processQueue(db, Date.now() + QUEUE_FIRST_MS);
 
-  // 2. New launches.
+  // 3. New launches.
   for (const f of adapter.factories) {
     try {
       await ingestFactory(db, adapter, f.id, latest);
@@ -193,9 +287,12 @@ async function main() {
       await setJobState(db, `ingest:${f.id}`, { status: 'error', error: msg.slice(0, 500) }).catch(() => {});
     }
   }
-  // 3. Whatever time is left goes back to the queue.
+  // 4. Whatever time is left goes back to the queue.
   queued += await processQueue(db);
-  await setJobState(db, 'ingest:queue', { status: 'ok', error: null, stats: { processed: queued } });
+  // Wallets found in the token queue during this run get their lookup now instead of next run.
+  await processCreatorLookups(db, adapter).catch(() => 0);
+  const pruned = await pruneOgImages(db).catch(() => 0);
+  await setJobState(db, 'ingest:queue', { status: 'ok', error: null, stats: { processed: queued, walletLookups: lookups, shareImagesPruned: pruned } });
   log(`done (${(Date.now() - started) / 1000}s)`);
 }
 

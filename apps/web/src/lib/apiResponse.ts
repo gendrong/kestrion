@@ -7,7 +7,7 @@ export const CORS_HEADERS = {
   'Access-Control-Max-Age': '86400',
 } as const;
 
-export type ApiErrorCode = 'invalid_address' | 'not_a_launch' | 'rate_limited' | 'unavailable' | 'internal_error';
+export type ApiErrorCode = 'invalid_address' | 'not_a_launch' | 'no_launches' | 'rate_limited' | 'unavailable' | 'internal_error';
 
 /** JSON.stringify that turns bigints into strings (stored reports are JSON-safe; this is a safety net). */
 export const toJson = (value: unknown) => JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));

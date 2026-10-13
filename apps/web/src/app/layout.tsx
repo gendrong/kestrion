@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import Link from 'next/link';
 import { Logo, LogoMark } from '@/components/Logo';
+import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL } from '@/lib/site';
 import './globals.css';
 
 // Self-hosted variable fonts (OFL, from Fontsource; licenses in ./fonts). No network needed at build or run time.
@@ -13,11 +14,22 @@ const spaceGrotesk = localFont({
   display: 'swap',
 });
 
+const DESCRIPTION =
+  'Explainable risk reports for every token launched on Robinhood Chain launchpads. Rule-based checks, raw numbers, no hype. Data, not advice.';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: { default: 'Kestrion: risk reports for Robinhood Chain launches', template: '%s · Kestrion' },
-  description:
-    'Explainable risk reports for every token launched on Robinhood Chain launchpads. Rule-based checks, raw numbers, no hype. Data, not advice.',
-  applicationName: 'Kestrion',
+  description: DESCRIPTION,
+  applicationName: SITE_NAME,
+  // Pages without their own image (home, creator, today, about) share the default card.
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    description: DESCRIPTION,
+    images: [{ url: DEFAULT_OG_IMAGE, width: 1200, height: 630, alt: 'Kestrion: Hovers. Watches. Strikes before the rug.' }],
+  },
+  twitter: { card: 'summary_large_image', images: [DEFAULT_OG_IMAGE] },
 };
 
 export const viewport: Viewport = {
@@ -39,11 +51,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Logo />
             </Link>
             <nav aria-label="Main" className="flex items-center gap-1 text-[15px] font-medium">
-              <Link href="/#feed" className="rounded-lg px-3 py-2.5 text-ink hover:text-ink-2">
-                Live feed
+              <Link href="/#feed" className="rounded-lg px-2.5 py-2.5 text-ink hover:text-ink-2 sm:px-3">
+                Live
               </Link>
-              <Link href="/#how" className="hidden rounded-lg px-3 py-2.5 text-ink-3 hover:text-ink sm:inline-block">
-                How scoring works
+              <Link href="/today" className="rounded-lg px-2.5 py-2.5 text-ink hover:text-ink-2 sm:px-3">
+                Today
+              </Link>
+              <Link href="/about" className="rounded-lg px-2.5 py-2.5 text-ink-3 hover:text-ink sm:px-3">
+                About
               </Link>
             </nav>
           </div>

@@ -77,3 +77,50 @@ test('stored report renders (E2E_LIVE=1, needs the database)', async ({ page }, 
   await expect(page.getByText('Score out of 100')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'All checks' })).toBeVisible();
 });
+
+// Phase 4: creator pages, /today, /about, share images.
+
+test('header links to Today and About', async ({ page }) => {
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Main' });
+  await nav.getByRole('link', { name: 'About' }).click();
+  await expect(page).toHaveURL('/about');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('How the score');
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Today' }).click();
+  await expect(page).toHaveURL('/today');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Today on');
+});
+
+test('about explains all eight checks with their weights and the disclaimer', async ({ page }) => {
+  await page.goto('/about');
+  await expect(page.getByRole('heading', { level: 3 })).toHaveCount(8);
+  await expect(page.getByText('Unknown is never a pass.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Data, not advice. DYOR.' })).toBeVisible();
+  await expect(page.getByText(/Warn\s+−10\s+· Fail\s+−25/).first()).toBeVisible();
+});
+
+test('creator page explains an invalid address', async ({ page }) => {
+  await page.goto('/creator/nope');
+  await expect(page.getByRole('heading', { name: /not a valid address/i })).toBeVisible();
+});
+
+test('creator API validates the address', async ({ request }) => {
+  const res = await request.get('/api/v1/creator/hello');
+  expect(res.status()).toBe(400);
+  expect(await res.json()).toEqual({ error: { code: 'invalid_address', message: expect.any(String) } });
+});
+
+test('share image falls back to the default card', async ({ request }) => {
+  const res = await request.get('/og/not-an-address', { maxRedirects: 0 });
+  expect(res.status()).toBe(302);
+  expect(res.headers()['location']).toContain('/og-default.png');
+  const img = await request.get('/og-default.png');
+  expect(img.status()).toBe(200);
+  expect(img.headers()['content-type']).toContain('image/png');
+});
+
+test('pages carry share metadata', async ({ page }) => {
+  await page.goto('/about');
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', /\/og-default\.png$/);
+  await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
+});

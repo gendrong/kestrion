@@ -6,9 +6,10 @@ import { runChecks } from '../checks';
 import type { EngineContext } from '../context';
 import { buildReport } from '../report/build';
 import { ENGINE_CONFIG, type EngineConfig } from '../scoring/config';
-import type { LaunchInfo, ScanReport } from '../types';
+import type { CreatorSnapshot, LaunchInfo, ScanReport } from '../types';
 import { cleanMetadata, type TokenMetadata } from '../util/media';
 import { collectScanData } from './collect';
+import { buildCreatorSnapshot } from './creator';
 
 export class InvalidAddressError extends Error {
   constructor(input: string) {
@@ -29,6 +30,8 @@ export interface FullScan {
   launch: LaunchInfo;
   /** Cleaned token metadata (logo CID, description, socials). */
   metadata: TokenMetadata;
+  /** What this scan learned about the creator (all launches, wallet age, funding, linked wallets). */
+  creator: CreatorSnapshot;
 }
 
 /** Scan and also return launch info + metadata (used by the ingest job). */
@@ -51,7 +54,7 @@ export async function scanTokenFull(
   const used = ctx.rpcStatus();
   const pub = used.find((u) => u.name === 'public RPC');
   if (pub && pub.failures > 0 && pub.successes === 0) notes.push('Public RPC unreachable: all chain reads used the fallback RPC.');
-  return { report: buildReport(data, checks, cfg, notes), launch: data.launch, metadata };
+  return { report: buildReport(data, checks, cfg, notes), launch: data.launch, metadata, creator: buildCreatorSnapshot(data) };
 }
 
 export async function scanToken(

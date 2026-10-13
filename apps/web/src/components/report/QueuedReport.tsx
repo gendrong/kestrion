@@ -21,7 +21,11 @@ export function QueuedReport({ address, status }: { address: string; status: 'qu
       try {
         const res = await fetch(`/api/v1/token/${address}`, { cache: 'no-store' });
         if (res.status === 200) router.refresh();
-        else if (res.status === 404) setState('not_a_launch');
+        // Not a token: let the server decide (a wallet redirects to its creator page).
+        else if (res.status === 404) {
+          setState('not_a_launch');
+          router.refresh();
+        }
         else if (res.status === 202) {
           const body = (await res.json()) as { meta?: { status?: string } };
           if (body.meta?.status === 'failed') setState('failed');
@@ -40,7 +44,13 @@ export function QueuedReport({ address, status }: { address: string; status: 'qu
     return (
       <section role="alert" className="rounded-3xl bg-card p-6 sm:p-8">
         <h1 className="font-display text-2xl font-bold tracking-[-0.02em]">No Pons launch found for this address</h1>
-        <p className="mt-2 text-ink-2">This address is not a token launched on Pons (V2, V1 active or V1 legacy). Creator pages are coming soon.</p>
+        <p className="mt-2 text-ink-2">
+          This address is not a token launched on Pons (V2, V1 active or V1 legacy). If it is a wallet, see{' '}
+          <Link href={`/creator/${address}`} className="font-semibold underline">
+            its launches
+          </Link>
+          .
+        </p>
         <Link href="/" className="link-neon mt-4 inline-flex min-h-11 items-center font-semibold">
           Back to home
         </Link>

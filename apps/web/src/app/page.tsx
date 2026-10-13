@@ -1,4 +1,5 @@
 import { getFeed, parseFeedQuery, type FeedItem } from '@kestrion/db';
+import Link from 'next/link';
 import { LiveFeed } from '@/components/feed/LiveFeed';
 import { SearchForm } from '@/components/SearchForm';
 import { getDb } from '@/lib/db';
@@ -120,6 +121,9 @@ export default async function HomePage() {
               </li>
             ))}
           </ol>
+          <Link href="/about" className="link-neon inline-flex min-h-11 items-center self-start text-lg font-semibold">
+            Every check, threshold and weight explained →
+          </Link>
         </div>
       </section>
     </>

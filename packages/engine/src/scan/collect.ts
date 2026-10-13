@@ -112,7 +112,8 @@ async function loadPriorLaunches(ctx: EngineContext, adapter: LaunchpadAdapter, 
     .filter((r) => (seen.has(r.token.toLowerCase()) ? false : (seen.add(r.token.toLowerCase()), true)))
     .sort((a, b) => (a.launchBlock > b.launchBlock ? -1 : 1));
   const analysed = await mapLimit(others.slice(0, cfg.maxPriorLaunchesAnalyzed), 2, (r) => adapter.describePriorLaunch(r, cfg, now));
-  return { launches: analysed, total: others.length, partial: partial || launch.deployerIsContract };
+  const all = others.map((r) => ({ token: r.token, factoryId: r.factoryId, launchBlock: r.launchBlock, launchTime: r.launchTime }));
+  return { launches: analysed, total: others.length, partial: partial || launch.deployerIsContract, all };
 }
 
 async function loadFlows(ctx: EngineContext, token: Address, wallets: Address[]): Promise<WalletFlow[]> {

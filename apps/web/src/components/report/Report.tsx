@@ -2,7 +2,10 @@
 
 import { LINKS } from '@kestrion/engine/config';
 import type { ScanReport, ScoredCheck } from '@kestrion/engine/types';
-import { FACTORY_NAME, humanKey, initials, LABEL_STYLE, shortAddr, STATUS_STYLE, timeAgo } from '@/lib/format';
+import Link from 'next/link';
+import { ShareButton } from '@/components/ShareButton';
+import { SITE_URL } from '@/lib/site';
+import { FACTORY_NAME, formatAge, FUNDING_LABEL, humanKey, initials, LABEL_STYLE, shortAddr, STATUS_STYLE, timeAgo } from '@/lib/format';
 
 const External = ({ href, children }: { href: string; children: React.ReactNode }) => (
   <a href={href} target="_blank" rel="noopener noreferrer nofollow" className="link-neon inline-flex min-h-11 items-center font-semibold">
@@ -75,6 +78,12 @@ export function Report({ report }: { report: ScanReport }) {
           <div className="flex flex-wrap gap-x-6">
             <External href={LINKS.ponsToken(report.token.address)}>View on Pons</External>
             <External href={LINKS.explorerToken(report.token.address)}>Explorer</External>
+          </div>
+          <div className="border-t border-line-soft pt-4">
+            <ShareButton
+              url={`${SITE_URL}/t/${report.token.address.toLowerCase()}`}
+              text={`${report.token.name} (${report.token.symbol}): ${report.score}/100 ${report.label} on Kestrion. Data, not advice.`}
+            />
           </div>
         </section>
 
@@ -156,28 +165,17 @@ function formatRaw(v: unknown): string {
 function CreatorCard({ report, wallet, history }: { report: ScanReport; wallet?: ScoredCheck; history?: ScoredCheck }) {
   const w = wallet?.value as { walletAgeDays?: number; fundingSource?: string; funder?: string | null; funderLabel?: string | null } | undefined;
   const h = history?.value as { priorLaunches?: number; diedFast?: number; graduated?: number; searchPartial?: boolean } | undefined;
-  const funding: Record<string, string> = {
-    exchange: 'Exchange',
-    bridge: 'Bridge',
-    launch_proceeds: 'Launch proceeds',
-    contract: 'Contract',
-    wallet: 'Another wallet',
-    none: 'No ETH transfer found',
-    unknown: 'Unknown',
-  };
   return (
     <section className="rounded-3xl bg-card p-6" aria-labelledby="creator-title">
       <h2 id="creator-title" className="font-display text-lg font-bold">
         Creator
       </h2>
-      <a
-        href={LINKS.explorerAddress(report.creator.address)}
-        target="_blank"
-        rel="noopener noreferrer nofollow"
+      <Link
+        href={`/creator/${report.creator.address.toLowerCase()}`}
         className="mt-1 block font-mono text-sm break-all underline decoration-line underline-offset-4 hover:decoration-ink"
       >
         {report.creator.address}
-      </a>
+      </Link>
       {report.creator.deployerIsContract && (
         <p className="mt-1 text-sm text-muted">Launched through contract {shortAddr(report.creator.deployer)}.</p>
       )}
@@ -188,7 +186,7 @@ function CreatorCard({ report, wallet, history }: { report: ScanReport; wallet?:
         </div>
         <div>
           <dt className="text-muted">First funded by</dt>
-          <dd className="font-semibold">{w?.fundingSource ? (funding[w.fundingSource] ?? w.fundingSource) : 'Unknown'}</dd>
+          <dd className="font-semibold">{w?.fundingSource ? (FUNDING_LABEL[w.fundingSource] ?? w.fundingSource) : 'Unknown'}</dd>
         </div>
         <div>
           <dt className="text-muted">Earlier launches</dt>
@@ -210,14 +208,14 @@ function CreatorCard({ report, wallet, history }: { report: ScanReport; wallet?:
           </a>
         </p>
       )}
+      <div className="mt-3 flex flex-wrap gap-x-5">
+        <Link href={`/creator/${report.creator.address.toLowerCase()}`} className="link-neon inline-flex min-h-11 items-center font-semibold">
+          All launches by this creator →
+        </Link>
+        <External href={LINKS.explorerAddress(report.creator.address)}>Explorer</External>
+      </div>
     </section>
   );
-}
-
-function formatAge(days: number): string {
-  if (days < 1) return `${Math.max(1, Math.round(days * 24))} hours`;
-  if (days < 60) return `${Math.round(days)} days`;
-  return `${Math.round(days / 30)} months`;
 }
 
 function HoldersCard({ report }: { report: ScanReport }) {

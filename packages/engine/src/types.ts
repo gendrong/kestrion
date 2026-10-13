@@ -144,6 +144,44 @@ export interface PriorLaunch {
   diedFast: boolean | null;
 }
 
+/** Another launch by the same creator: every one found, not only the ones analysed in detail. */
+export interface CreatorLaunchRef {
+  token: Address;
+  factoryId: FactoryId;
+  launchBlock: bigint;
+  /** Unix seconds, when known. */
+  launchTime?: number;
+}
+
+/** What one scan learned about the creator (stored in the `creators` table by the jobs). */
+export interface CreatorSnapshot {
+  address: Address;
+  /** ISO time of the wallet's first transaction, or null when unknown. */
+  firstSeen: string | null;
+  fundingSource: FunderKind | null;
+  funder: Address | null;
+  funderLabel: string | null;
+  /** All Pons launches found for this creator, including the scanned token, newest first. null = search failed. */
+  launches: CreatorLaunch[] | null;
+  /** True when the launch search could not cover everything (e.g. launches through other contracts). */
+  searchPartial: boolean;
+  /** Wallets linked to the creator in this launch (funding links, exemptions, other identities). null = not traced. */
+  linkedWallets: LinkedWallet[] | null;
+}
+
+export interface CreatorLaunch {
+  token: Address;
+  factoryId: FactoryId;
+  launchBlock: string;
+  launchTime: string | null;
+  /** Only for the launches analysed in detail (and the scanned token). */
+  name?: string;
+  symbol?: string;
+  graduated?: boolean | null;
+  /** null = outcome unknown. */
+  diedFast?: boolean | null;
+}
+
 export interface WalletFlow {
   address: Address;
   received: bigint;
@@ -170,7 +208,7 @@ export interface ScanData {
   /** Creator identities + wallets linked to them, with reasons. */
   linked: Result<LinkedWallet[]>;
   /** `launches` = the most recent ones analysed in detail; `total` = all found; `partial` = search incomplete. */
-  priorLaunches: Result<{ launches: PriorLaunch[]; total: number; partial: boolean }>;
+  priorLaunches: Result<{ launches: PriorLaunch[]; total: number; partial: boolean; all?: CreatorLaunchRef[] }>;
   flows: Result<WalletFlow[]>;
 }
 

@@ -6,12 +6,22 @@ Read-only: Kestrion never holds keys and never sends transactions. **Data, not a
 The full product spec is in [CLAUDE.md](CLAUDE.md); progress is in [PROGRESS.md](PROGRESS.md);
 verified chain facts are in [docs/chain-research.md](docs/chain-research.md).
 
-## What works today (Phase 3)
+## What works today (Phase 4)
 
-- **Ingest job** (`jobs/`, GitHub Actions every 5 min): scans every new Pons launch and stores it in Cloudflare D1.
-- **Website** (`apps/web`, Cloudflare Workers): home page with search + live feed (filters, sorting, auto-refresh),
-  and a report page for any token at `/t/<address>` (tokens not scanned yet are queued and filled in automatically).
-- **Public API**: `GET /api/v1/token/<address>` and `GET /api/v1/launches`, rate-limited per IP (Cloudflare binding).
+- **Ingest job** (`jobs/`, GitHub Actions every 5 min): scans every new Pons launch and stores it in Cloudflare D1,
+  updates the creator's profile, and renders a share image (PNG) for each recent launch.
+- **Website** (`apps/web`, Cloudflare Workers):
+  - `/` search + live feed (filters, sorting, auto-refresh; each row links to the token and its creator)
+  - `/t/<address>` token report with share button and share image (unscanned tokens are queued; a wallet address
+    redirects to its creator page)
+  - `/creator/<address>` all Pons launches by a wallet with scores and outcomes, stats, linked wallets
+    (an unknown wallet is looked up by the next job run)
+  - `/today` lowest / highest scores of the last 24h and the biggest score changes
+  - `/about` how scoring works, every check with its thresholds and weights, limits, disclaimer
+- **Public API**: `GET /api/v1/token/<address>`, `GET /api/v1/creator/<address>` and `GET /api/v1/launches`,
+  rate-limited per IP (Cloudflare binding).
+- **Share images**: `/og/<address>` (rendered by the job, stored in D1, kept 14 days; older tokens use
+  `apps/web/public/og-default.png`, regenerate it with `npm run og:default -w @kestrion/jobs`).
 - Live at **https://kestrion.autora.workers.dev**
 - **Command-line scanner**: `npm run scan <address>` prints a report in the terminal.
 

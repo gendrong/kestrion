@@ -123,5 +123,39 @@
 - Reports are from scan time; rescans (score changes) come in Phase 5.
 - Market cap still not shown (V2 price function not verified).
 
-## Next: Phase 4 — Creator profiles, Today & About
-Prompt: `phases/phase-4-creator-today-about.md`
+## Phase 4 — Creator profiles, Today & About 🟡 (2026-10-13: built and deployed; blocked by explorer credits)
+
+**Decisions**
+- Share images are rendered in the GitHub job (satori + resvg, fonts from @fontsource) and stored in D1 as base64
+  PNG (~40 KB): free Workers have ~10 ms CPU, too little to draw images. Kept 14 days, then the default card is used.
+- Packages pinned to versions at least 2 weeks old (satori 0.33.5: newer versions were published in a burst that week).
+- Creator profiles live in `creators` (one row per wallet, merged from every scan); wallets nobody scanned yet are
+  looked up on demand (`creator_requests`, migration `0002_creators_og.sql`).
+
+**Done**
+- Engine: every scan returns a creator snapshot (all launches found on-chain, wallet age, funding, linked wallets).
+- DB: `creators` filled by the job (merge keeps details across scans, linked wallets accumulate), creator lookup
+  queue, `/today` queries, share image storage + pruning. 23 db tests, 85 engine tests.
+- Job: creator profile + share image after each scan; wallet lookups (search launches, queue the newest 3 for
+  scanning); wallets pasted into the token search are detected and turned into lookups.
+- Website: `/creator/[address]` (launch list with scores and outcomes, stats, linked wallets, Follow placeholder),
+  `/today`, `/about` (numbers from the scoring config), `/og/[address]`, share button (share sheet / copy / X),
+  SEO + Open Graph + Twitter cards, creator links in the feed and report, header nav. 30 Playwright tests pass.
+- Live: D1 migrated, site deployed; checked creator page, redirects, metadata and a real stored share image.
+
+**Blocker (found 2026-10-13)**
+- The free Blockscout tier (100k credits/day, ~20 credits per call ≈ 5,000 calls/day, resets 00:00 UTC) ran out at
+  ~03:30 UTC. A full scan uses ~30 calls, so the free tier covers ~160 scans/day, but Pons has ~1,300 launches/day.
+  Since then every scan fails (`Out of credits`) and the feed stops at 03:30 until the daily reset.
+  Paid plans start at $49/month (over budget). Needs a decision: see "Next".
+
+**Known issues / limitations**
+- Creators scanned before Phase 4 have no stored launch history yet; their page shows the scanned tokens and
+  queues an on-chain lookup (needs explorer credits).
+- The Worker's quick wallet-vs-token check (public RPC eth_getCode) may fail from Cloudflare; the job then detects
+  wallets instead and the page redirects after the next run.
+- Share images use Latin fonts: other scripts and emoji are left out of the image (the page shows the real name).
+
+## Next: fix the explorer budget, then finish Phase 4 checks
+Use far fewer explorer calls per launch (details in the chat of 2026-10-13), then confirm "clicking any creator shows
+their full launch history" on the live site.

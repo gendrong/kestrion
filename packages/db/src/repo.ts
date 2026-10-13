@@ -128,12 +128,18 @@ export async function getFeed(db: Db, q: FeedQuery): Promise<FeedItem[]> {
   const order =
     q.sort === 'safest' ? 'score DESC, launch_time DESC' : q.sort === 'riskiest' ? 'score ASC, launch_time DESC' : 'launch_time DESC';
   const rows = await db.all<Record<string, unknown>>(
-    `SELECT address, name, symbol, logo_cid, launch_time, pair_type, pair_symbol, curve_progress, graduated, stage, score, label,
-            last_scanned_at, factory
-       FROM tokens WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ${limitOf(q.limit)}`,
+    `SELECT ${FEED_COLUMNS} FROM tokens WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ${limitOf(q.limit)}`,
     params,
   );
-  return rows.map((r) => ({
+  return rows.map(toFeedItem);
+}
+
+/** Columns needed for a FeedItem (see toFeedItem). */
+export const FEED_COLUMNS = `address, name, symbol, logo_cid, launch_time, pair_type, pair_symbol, curve_progress, graduated, stage, score, label,
+  last_scanned_at, factory, creator`;
+
+export function toFeedItem(r: Record<string, unknown>): FeedItem {
+  return {
     address: r.address as string,
     name: r.name as string,
     symbol: r.symbol as string,
@@ -148,10 +154,14 @@ export async function getFeed(db: Db, q: FeedQuery): Promise<FeedItem[]> {
     label: (r.label as string | null) ?? null,
     lastScannedAt: (r.last_scanned_at as string | null) ?? null,
     factory: r.factory as string,
-  }));
+    creator: r.creator as string,
+  };
 }
 
 export type ScanRequestStatus = 'queued' | 'scanning' | 'done' | 'failed' | 'not_a_launch';
+
+/** `error` of a not_a_launch request whose address turned out to be a wallet (the website redirects to its creator page). */
+export const WALLET_MARK = 'wallet';
 
 export interface ScanRequest {
   token: string;

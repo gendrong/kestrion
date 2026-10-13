@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./config": "./src/chain/config.ts",
     "./types": "./src/types.ts",
-    "./media": "./src/util/media.ts"
+    "./media": "./src/util/media.ts",
+    "./scoring": "./src/scoring/config.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -45,3 +45,20 @@ export function initials(name: string): string {
   const parts = name.replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/);
   return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? parts[0]?.[1] ?? '')).toUpperCase();
 }
+
+/** Where a wallet's first ETH came from (engine FunderKind). */
+export const FUNDING_LABEL: Record<string, string> = {
+  exchange: 'Exchange',
+  bridge: 'Bridge',
+  launch_proceeds: 'Launch proceeds',
+  contract: 'Contract',
+  wallet: 'Another wallet',
+  none: 'No ETH transfer found',
+  unknown: 'Unknown',
+};
+
+export function formatAge(days: number): string {
+  if (days < 1) return `${Math.max(1, Math.round(days * 24))} hours`;
+  if (days < 60) return `${Math.round(days)} days`;
+  return `${Math.round(days / 30)} months`;
+}

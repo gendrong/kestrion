@@ -6,10 +6,15 @@
   "type": "module",
   "scripts": {
     "ingest": "tsx src/ingest.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "og:default": "tsx src/og-default.ts"
   },
   "dependencies": {
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/space-grotesk": "5.3.0",
     "@kestrion/db": "*",
-    "@kestrion/engine": "*"
+    "@kestrion/engine": "*",
+    "@resvg/resvg-js": "2.6.2",
+    "satori": "0.33.5"
   }
 }
