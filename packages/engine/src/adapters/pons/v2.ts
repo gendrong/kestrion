@@ -9,7 +9,7 @@ import type { EngineConfig } from '../../scoring/config';
 import type { CurveState, ExemptionData, LaunchInfo, PriorLaunch, Trade } from '../../types';
 import { pct, sameAddr, uniqAddrs } from '../../util/format';
 import { mapLimit } from '../../util/limiter';
-import type { DiscoveredLaunch, PriorLaunchRef } from '../types';
+import type { DiscoveredLaunch, LaunchHint, PriorLaunchRef } from '../types';
 import { decodeDeclaredExemptions, detectExemptBuys, diedFast, type CurveTradeLite } from './analysis';
 import { contractLogs, isContract, locateLaunch, ranges, readPair, readTokenBasics } from './common';
 
@@ -33,11 +33,11 @@ async function getLaunchedToken(ctx: EngineContext, token: Address): Promise<Lau
   })) as unknown as LaunchedTokenV2;
 }
 
-export async function findLaunchV2(ctx: EngineContext, token: Address): Promise<LaunchInfo | null> {
+export async function findLaunchV2(ctx: EngineContext, token: Address, hint: LaunchHint = {}): Promise<LaunchInfo | null> {
   const lt = await getLaunchedToken(ctx, token);
   if (!lt.exists) return null;
 
-  const located = await locateLaunch(ctx, { factory: PONS_V2.factory, topic0: TOPICS.v2TokenLaunched, token });
+  const located = await locateLaunch(ctx, { factory: PONS_V2.factory, topic0: TOPICS.v2TokenLaunched, token, txHash: hint.txHash });
   const ev = decodeEventLog({ abi: ponsV2FactoryAbi, data: located.log.data, topics: located.log.topics as [Hex, ...Hex[]] });
   if (ev.eventName !== 'TokenLaunched') throw new Error('Unexpected launch event');
   const args = ev.args as { curve: Address; deployer: Address; pairToken: Address; launchConfigId: bigint; graduationThreshold: bigint };
@@ -210,8 +210,17 @@ export async function discoverLaunchesV2(ctx: EngineContext, fromBlock: bigint, 
   const logs = await getLogsChunked(ctx.rpc, { address: PONS_V2.factory, topics: [TOPICS.v2TokenLaunched] }, fromBlock, toBlock);
   return logs.map((l) => {
     const ev = decodeEventLog({ abi: ponsV2FactoryAbi, data: l.data, topics: l.topics as [Hex, ...Hex[]] });
-    const a = ev.args as { token: Address; deployer: Address };
-    return { factoryId: 'pons-v2', token: a.token, deployer: a.deployer, blockNumber: l.blockNumber, txHash: l.transactionHash };
+    const a = ev.args as { token: Address; deployer: Address; curve: Address; pairToken: Address; graduationThreshold: bigint };
+    return {
+      factoryId: 'pons-v2',
+      token: a.token,
+      deployer: a.deployer,
+      blockNumber: l.blockNumber,
+      txHash: l.transactionHash,
+      curveOrPool: a.curve,
+      pairToken: a.pairToken,
+      graduationThreshold: a.graduationThreshold,
+    };
   });
 }
 
@@ -244,12 +253,19 @@ export async function findLaunchesByCreatorV2(
   return { refs, partial: results.some((r) => r.capped) };
 }
 
-export async function describePriorLaunchV2(ctx: EngineContext, ref: PriorLaunchRef, cfg: EngineConfig, now: number): Promise<PriorLaunch> {
+export async function describePriorLaunchV2(
+  ctx: EngineContext,
+  ref: PriorLaunchRef,
+  cfg: EngineConfig,
+  now: number,
+  /** "Died fast" needs the curve's trades over 24h (explorer calls): only in full scans. */
+  outcome = true,
+): Promise<PriorLaunch> {
   const [basics, lt] = await Promise.all([readTokenBasics(ctx, ref.token).catch(() => ({ name: '?', symbol: '?' })), getLaunchedToken(ctx, ref.token)]);
   const graduated = lt.phase === 1 || lt.phase === 2;
   let died: boolean | null = null;
   const d = cfg.checks.creatorHistory.diedFast;
-  if (ctx.explorer && ref.curve && ref.launchTime !== undefined) {
+  if (outcome && ctx.explorer && ref.curve && ref.launchTime !== undefined) {
     const windowBlocks = BigInt(Math.ceil((d.windowHours * 3600 * 1.1) / AVG_BLOCK_TIME_SECONDS));
     const [buys, sells] = await Promise.all([
       ctx.explorer.logs({ address: ref.curve, fromBlock: ref.launchBlock, toBlock: ref.launchBlock + windowBlocks, topics: { 0: TOPICS.v2CurveBuy } }),

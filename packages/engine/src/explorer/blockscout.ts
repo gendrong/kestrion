@@ -7,6 +7,7 @@ import type { Address, Hash, Hex } from 'viem';
 import { BLOCKSCOUT } from '../chain/config';
 import type { RawLog } from '../chain/logs';
 import { RateLimiter, sleep } from '../util/limiter';
+import { CreditBudget } from './budget';
 
 export interface AddressInfo {
   isContract: boolean;
@@ -34,6 +35,9 @@ export interface ExplorerTokenTransfer {
   hash: Hash;
 }
 
+/** Thrown without calling the API when the day's credits are used up. */
+export const OUT_OF_CREDITS = 'explorer API daily credits used up (they reset at 00:00 UTC)';
+
 export class ExplorerError extends Error {
   constructor(message: string) {
     super(message);
@@ -51,6 +55,8 @@ export class Blockscout {
     private readonly apiKey: string,
     readonly limiter: RateLimiter = new RateLimiter(BLOCKSCOUT.requestsPerSecond),
     private readonly base: string = BLOCKSCOUT.base,
+    /** Shared daily credit budget (see budget.ts). */
+    readonly budget: CreditBudget = new CreditBudget(),
   ) {}
 
   /** GET with rate limiting, retries on 429/5xx/non-JSON, and per-URL caching. */
@@ -60,6 +66,7 @@ export class Blockscout {
     const p = (async () => {
       let lastError = '';
       for (let attempt = 0; attempt < 4; attempt++) {
+        if (!this.budget.canCall()) throw new ExplorerError(OUT_OF_CREDITS);
         await this.limiter.wait();
         this.calls++;
         let res: Response;
@@ -70,6 +77,8 @@ export class Blockscout {
           await sleep(700 * 2 ** attempt);
           continue;
         }
+        this.budget.observe(res.status, res.headers.get('x-credits-remaining'));
+        if (res.status === 402) throw new ExplorerError(OUT_OF_CREDITS);
         if (res.status === 404) return null;
         if (res.status === 429 || res.status >= 500) {
           lastError = `HTTP ${res.status}`;

@@ -37,7 +37,11 @@ export function checkClusterBuy(d: ScanData, cfg: EngineConfig): CheckResult {
   };
 
   const status = linkedPct >= c.failAtPct ? 'fail' : linkedPct >= c.warnAtPct ? 'warn' : d.linked.ok ? 'pass' : 'unknown';
-  const traced = d.linked.ok ? '' : ' Funding links could not be traced, so only the creator’s own wallets are counted.';
+  const traced = d.linked.ok
+    ? ''
+    : d.depth === 'quick'
+      ? ' Quick scan: only the creator’s own wallets are counted; early buyers’ funding is traced in a full scan.'
+      : ' Funding links could not be traced, so only the creator’s own wallets are counted.';
   return {
     id: ID,
     title: TITLE,

@@ -13,6 +13,8 @@ export type CheckId =
   | 'pairType'
   | 'sellPressure';
 export type RiskLabel = 'Low risk' | 'Caution' | 'High risk';
+/** quick = every launch (few explorer calls); full = also funding traces and prior-launch outcomes. */
+export type ScanDepth = 'quick' | 'full';
 
 /** A value that may have failed to load. Checks turn `ok: false` into status `unknown`. */
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -198,6 +200,7 @@ export interface ScanData {
   now: number;
   latestBlock: bigint;
   earlyWindowBlocks: number;
+  depth: ScanDepth;
   curve: Result<CurveState>;
   earlyTrades: Result<Trade[]>;
   exemptions: Result<ExemptionData> | 'not_applicable';
@@ -228,6 +231,8 @@ export interface ScoredCheck extends CheckResult {
 export interface ScanReport {
   engineVersion: string;
   scannedAt: string;
+  /** Missing in reports from engine < 0.2.0 (those were all full scans). */
+  scanDepth?: ScanDepth;
   token: { address: Address; name: string; symbol: string; decimals: number; totalSupply: string };
   launchpad: { id: 'pons'; factoryId: FactoryId; version: 'v1' | 'v2'; factory: Address };
   launch: { block: string; time: string; tx: Hash };

@@ -73,7 +73,14 @@ async function Body({ address }: { address: string | null }) {
   if (!db) return <Message title="Reports are temporarily unavailable">The database is not configured. Please try again later.</Message>;
 
   const latest = await latestScan(address);
-  if (latest) return <Report report={latest.report} />;
+  if (latest) {
+    // Someone is looking at a quick report: ask for a full scan (the job runs it when the day's credits allow).
+    let fullScanQueued = false;
+    if (latest.report.scanDepth === 'quick' && (await rateLimit('enqueue', await headers())).ok) {
+      fullScanQueued = await enqueueScan(db, address, 'full').then(() => true, () => false);
+    }
+    return <Report report={latest.report} fullScanQueued={fullScanQueued} />;
+  }
 
   // Not a scanned token. A wallet (known creator, or an address without contract code) goes to its creator page.
   if ((await isKnownCreator(db, address)) || (await addressKind(address)) === 'wallet') redirect(`/creator/${address}`);

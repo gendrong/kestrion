@@ -31,6 +31,7 @@ export function buildReport(data: ScanData, checks: CheckResult[], cfg: EngineCo
   return {
     engineVersion: ENGINE_VERSION,
     scannedAt: new Date(data.now * 1000).toISOString(),
+    scanDepth: data.depth,
     token: { address: l.token, name: l.name, symbol: l.symbol, decimals: l.decimals, totalSupply: l.totalSupply.toString() },
     launchpad: { id: 'pons', factoryId: l.factoryId, version: l.version, factory: l.factoryAddress },
     launch: { block: l.launchBlock.toString(), time: new Date(l.launchTime * 1000).toISOString(), tx: l.launchTx },
@@ -50,7 +51,12 @@ export function buildReport(data: ScanData, checks: CheckResult[], cfg: EngineCo
     checks: scored,
     topHolders: rankHolders(data).slice(0, 10),
     summary: buildSummary(score, label, scored),
-    notes: [...new Set(notes)],
+    notes: [
+      ...(data.depth === 'quick'
+        ? ['Quick scan: early buyers’ funding and the outcome of the creator’s earlier launches are checked in a full scan.']
+        : []),
+      ...new Set(notes),
+    ],
     disclaimer: DISCLAIMER,
   };
 }

@@ -24,13 +24,17 @@ export function classifyLabels(labels: string[], isContract: boolean): FunderKin
 }
 
 export class WalletProfiler {
-  private profiles = new Map<string, Promise<WalletProfile>>();
-  private funders = new Map<string, Promise<{ kind: FunderKind; label?: string }>>();
+  private readonly profiles: Map<string, Promise<WalletProfile>>;
+  private readonly funders: Map<string, Promise<{ kind: FunderKind; label?: string }>>;
 
   constructor(
     private readonly ctx: EngineContext,
     private readonly now: number,
-  ) {}
+  ) {
+    // Shared across the scans of a job run, so a wallet or funder is looked up once per run.
+    this.profiles = ctx.shared.profiles;
+    this.funders = ctx.shared.funders;
+  }
 
   profile(address: Address): Promise<WalletProfile> {
     const key = address.toLowerCase();
@@ -46,7 +50,10 @@ export class WalletProfiler {
     const explorer = this.ctx.explorer;
     if (!explorer) throw new Error('Explorer API needed for wallet history');
     // Address labels are only fetched for funders (classifyFunder), not for every profiled wallet.
-    const [txs, internals] = await Promise.all([explorer.firstTransactions(address), explorer.firstInternalTransactions(address)]);
+    // Normal transactions first; internal ones (ETH sent by contracts) only when no incoming ETH shows up there.
+    const txs = await explorer.firstTransactions(address);
+    const fundedNormally = txs.some((t) => !t.isError && sameAddr(t.to, address) && t.value > 0n && !sameAddr(t.from, address));
+    const internals = fundedNormally ? [] : await explorer.firstInternalTransactions(address);
     const all = [...txs, ...internals].filter((t) => !t.isError);
     const firstSeen = all.length ? Math.min(...all.map((t) => t.timeStamp)) : undefined;
     const incoming = all
@@ -54,6 +61,7 @@ export class WalletProfiler {
       .sort((a, b) => a.timeStamp - b.timeStamp);
     const first = incoming[0];
     const funderInfo = first ? await this.classifyFunder(first.from) : { kind: 'none' as FunderKind };
+    // Age is relative to this scan's time (cached profiles may come from an earlier scan of the run).
     return {
       address,
       firstSeen,
@@ -97,9 +105,10 @@ export class WalletProfiler {
   }
 }
 
-export async function buildCreatorProfile(profiler: WalletProfiler, creator: Address): Promise<CreatorProfile> {
+/** Creator wallet profile; `secondHop` also profiles the funding wallet (full scans only: more explorer calls). */
+export async function buildCreatorProfile(profiler: WalletProfiler, creator: Address, secondHop = true): Promise<CreatorProfile> {
   const p = await profiler.profile(creator);
-  if (p.funder && p.funderKind === 'wallet') {
+  if (secondHop && p.funder && p.funderKind === 'wallet') {
     try {
       return { ...p, funderProfile: await profiler.profile(p.funder) };
     } catch {

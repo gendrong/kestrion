@@ -6,6 +6,7 @@ import { getLogsChunked, type RawLog } from '../../chain/logs';
 import type { EngineContext } from '../../context';
 import type { PairType } from '../../types';
 import { sameAddr } from '../../util/format';
+import { mapLimit } from '../../util/limiter';
 
 export async function readTokenBasics(ctx: EngineContext, token: Address) {
   const read = <T>(functionName: 'name' | 'symbol' | 'decimals' | 'totalSupply') =>
@@ -45,12 +46,13 @@ export interface LocatedLaunch {
 
 /**
  * Find the factory's TokenLaunched log for `token`.
- * Fast path: the explorer knows the token's creation tx (= the launch tx).
- * Fallback: scan the last ~500k blocks (≈ 14 h) for the event with token as topic1.
+ * 1. The launch tx is already known (the ingest job read the factory event): read its receipt from the RPC.
+ * 2. The explorer knows the token's creation tx (= the launch tx).
+ * 3. Fallback: scan the last ~500k blocks (≈ 14 h) for the event with token as topic1.
  */
 export async function locateLaunch(
   ctx: EngineContext,
-  args: { factory: Address; topic0: Hex; token: Address },
+  args: { factory: Address; topic0: Hex; token: Address; txHash?: Hash },
 ): Promise<LocatedLaunch> {
   const tokenTopic = pad(args.token.toLowerCase() as Hex).toLowerCase();
   const matches = (l: { address: string; topics: readonly string[] }) =>
@@ -58,23 +60,20 @@ export async function locateLaunch(
     l.topics[0]?.toLowerCase() === args.topic0.toLowerCase() &&
     l.topics[1]?.toLowerCase() === tokenTopic;
 
+  const fromReceipt = async (hash: Hash): Promise<RawLog | undefined> => {
+    const receipt = await ctx.rpc.getTransactionReceipt({ hash });
+    const l = receipt.logs.find((x) => matches(x));
+    return l
+      ? { address: l.address, topics: [...l.topics] as Hex[], data: l.data, blockNumber: l.blockNumber, transactionHash: l.transactionHash, logIndex: l.logIndex }
+      : undefined;
+  };
+
   let log: RawLog | undefined;
-  if (ctx.explorer) {
-    const info = await ctx.explorer.addressInfo(args.token);
-    if (info.creationTxHash) {
-      const receipt = await ctx.rpc.getTransactionReceipt({ hash: info.creationTxHash });
-      const l = receipt.logs.find((x) => matches(x));
-      if (l) {
-        log = {
-          address: l.address,
-          topics: [...l.topics] as Hex[],
-          data: l.data,
-          blockNumber: l.blockNumber,
-          transactionHash: l.transactionHash,
-          logIndex: l.logIndex,
-        };
-      }
-    }
+  if (args.txHash) log = await fromReceipt(args.txHash).catch(() => undefined);
+  if (!log && ctx.explorer) {
+    // An explorer failure (e.g. no credits left) just means: use the RPC fallback below.
+    const info = await ctx.explorer.addressInfo(args.token).catch(() => null);
+    if (info?.creationTxHash) log = await fromReceipt(info.creationTxHash);
   }
   if (!log) {
     ctx.log('Launch tx not found via explorer; scanning recent blocks…');
@@ -103,9 +102,13 @@ export async function locateLaunch(
   };
 }
 
+/** Ranges up to this many blocks are read from the RPC (free, ≤ 3 calls); wider ones from the explorer. */
+const RPC_FIRST_SPAN = 60_000n;
+
 /**
  * Logs of one contract for some event topics in a block range, with timestamps.
- * Uses the explorer (one call per topic, includes timestamps); falls back to RPC + block timestamps.
+ * Small ranges: RPC + block timestamps (no explorer credits). Wide ranges: the explorer (one call per topic,
+ * includes timestamps), falling back to the RPC when it is capped or unavailable.
  */
 export async function contractLogs(
   ctx: EngineContext,
@@ -115,10 +118,14 @@ export async function contractLogs(
   toBlock: bigint,
 ): Promise<RawLog[]> {
   const explorer = ctx.explorer;
-  if (explorer) {
-    const results = await Promise.all(topic0s.map((t) => explorer.logs({ address, fromBlock, toBlock, topics: { 0: t } })));
-    if (!results.some((r) => r.capped)) return sortLogs(results.flatMap((r) => r.logs));
-    ctx.log('Explorer log limit reached; reading logs from RPC instead…');
+  if (explorer && toBlock - fromBlock > RPC_FIRST_SPAN) {
+    try {
+      const results = await Promise.all(topic0s.map((t) => explorer.logs({ address, fromBlock, toBlock, topics: { 0: t } })));
+      if (!results.some((r) => r.capped)) return sortLogs(results.flatMap((r) => r.logs));
+      ctx.log('Explorer log limit reached; reading logs from RPC instead…');
+    } catch {
+      ctx.log('Explorer logs unavailable; reading logs from RPC instead…');
+    }
   }
   const logs = await getLogsChunked(ctx.rpc, { address, topics: [topic0s] }, fromBlock, toBlock);
   const times = await blockTimes(ctx, [...new Set(logs.map((l) => l.blockNumber))].slice(0, 60));
@@ -131,10 +138,10 @@ const sortLogs = (logs: RawLog[]) =>
 
 export async function blockTimes(ctx: EngineContext, blocks: bigint[]): Promise<Map<bigint, number>> {
   const out = new Map<bigint, number>();
-  for (const b of blocks) {
+  await mapLimit(blocks, 6, async (b) => {
     const blk = await ctx.rpc.getBlock({ blockNumber: b });
     out.set(b, Number(blk.timestamp));
-  }
+  });
   return out;
 }
 

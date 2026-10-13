@@ -48,8 +48,12 @@ export interface ScanRecord {
     graduated: boolean;
     stage: Stage;
     change_reason?: string;
+    /** 'quick' or 'full' (default 'full'). */
+    depth?: ScanDepth;
   };
 }
+
+export type ScanDepth = 'quick' | 'full';
 
 /**
  * Save one scan atomically (one D1 batch = one transaction): upsert the token, record a score change if the
@@ -86,13 +90,14 @@ export async function recordScan(db: Db, rec: ScanRecord): Promise<void> {
     {
       sql: `UPDATE tokens SET
               latest_scan_id = (SELECT id FROM scans WHERE token = ? ORDER BY id DESC LIMIT 1),
-              score = ?, label = ?, curve_progress = ?, graduated = ?, stage = ?, last_scanned_at = ?
+              score = ?, label = ?, curve_progress = ?, graduated = ?, stage = ?, last_scanned_at = ?, scan_depth = ?
             WHERE address = ?`,
-      params: [address, s.score, s.label, s.curve_progress, s.graduated ? 1 : 0, s.stage, s.scanned_at, address],
+      params: [address, s.score, s.label, s.curve_progress, s.graduated ? 1 : 0, s.stage, s.scanned_at, s.depth ?? 'full', address],
     },
     {
-      sql: `UPDATE scan_requests SET status = 'done', error = NULL, updated_at = ? WHERE token = ?`,
-      params: [nowIso(), address],
+      // A quick scan doesn't satisfy a request for a full scan.
+      sql: `UPDATE scan_requests SET status = 'done', error = NULL, updated_at = ? WHERE token = ? AND (depth = 'quick' OR ? = 'full')`,
+      params: [nowIso(), address, s.depth ?? 'full'],
     },
   ]);
 }
@@ -166,6 +171,7 @@ export const WALLET_MARK = 'wallet';
 export interface ScanRequest {
   token: string;
   status: ScanRequestStatus;
+  depth: ScanDepth;
   attempts: number;
   error: string | null;
   requested_at: string;
@@ -175,6 +181,7 @@ export interface ScanRequest {
 const toRequest = (r: Record<string, unknown>): ScanRequest => ({
   token: r.token as string,
   status: r.status as ScanRequestStatus,
+  depth: r.depth === 'quick' ? 'quick' : 'full',
   attempts: Number(r.attempts),
   error: (r.error as string | null) ?? null,
   requested_at: r.requested_at as string,
@@ -188,14 +195,25 @@ export async function getScanRequest(db: Db, address: string): Promise<ScanReque
 
 /**
  * Ask the jobs to scan a token. New requests are queued; failed ones are re-queued (max 3 attempts);
- * queued/scanning/done/not_a_launch requests are left alone. Returns the current request.
+ * queued/scanning/done/not_a_launch requests are left alone, except that asking for a full scan upgrades a
+ * quick one (a finished quick request is queued again). Returns the current request.
  */
-export async function enqueueScan(db: Db, address: string): Promise<ScanRequest> {
+export async function enqueueScan(db: Db, address: string, depth: ScanDepth = 'full'): Promise<ScanRequest> {
   const token = lc(address);
   const now = nowIso();
-  const [, , rows] = await db.batch([
-    { sql: `INSERT OR IGNORE INTO scan_requests (token, requested_at, status, attempts, updated_at) VALUES (?, ?, 'queued', 0, ?)`, params: [token, now, now] },
+  const [, , , rows] = await db.batch([
+    {
+      sql: `INSERT OR IGNORE INTO scan_requests (token, requested_at, status, attempts, updated_at, depth) VALUES (?, ?, 'queued', 0, ?, ?)`,
+      params: [token, now, now, depth],
+    },
     { sql: `UPDATE scan_requests SET status = 'queued', updated_at = ? WHERE token = ? AND status = 'failed' AND attempts < 3`, params: [now, token] },
+    {
+      sql: `UPDATE scan_requests SET depth = 'full', updated_at = ?,
+              attempts = CASE WHEN status IN ('done', 'failed') THEN 0 ELSE attempts END,
+              status = CASE WHEN status IN ('done', 'failed') THEN 'queued' ELSE status END
+             WHERE token = ? AND ? = 'full' AND depth = 'quick' AND status <> 'not_a_launch'`,
+      params: [now, token, depth],
+    },
     { sql: `SELECT * FROM scan_requests WHERE token = ?`, params: [token] },
   ]);
   const row = rows?.[0];
@@ -203,20 +221,47 @@ export async function enqueueScan(db: Db, address: string): Promise<ScanRequest>
   return toRequest(row);
 }
 
-/** Take up to `limit` queued requests (or ones stuck in 'scanning' for 20+ minutes). */
-export async function claimScanRequests(db: Db, limit: number): Promise<ScanRequest[]> {
+/**
+ * Take up to `limit` queued requests (or ones stuck in 'scanning' for 20+ minutes).
+ * `fullAllowed: false` (explorer credits low): full-scan requests are only taken for tokens that have no report
+ * yet (they get a quick scan now and stay queued for the full one).
+ */
+export async function claimScanRequests(db: Db, limit: number, opts: { fullAllowed?: boolean } = {}): Promise<ScanRequest[]> {
   const now = nowIso();
   const stale = new Date(Date.now() - 20 * 60_000).toISOString();
+  const depthFilter =
+    opts.fullAllowed === false
+      ? `AND (depth = 'quick' OR token NOT IN (SELECT address FROM tokens WHERE last_scanned_at IS NOT NULL))`
+      : '';
   const rows = await db.all(
     `UPDATE scan_requests SET status = 'scanning', attempts = attempts + 1, updated_at = ?
       WHERE token IN (
         SELECT token FROM scan_requests
-         WHERE status = 'queued' OR (status = 'scanning' AND updated_at < ?)
+         WHERE (status = 'queued' OR (status = 'scanning' AND updated_at < ?)) ${depthFilter}
          ORDER BY requested_at LIMIT ${limitOf(limit, 20)})
       RETURNING *`,
     [now, stale],
   );
   return rows.map(toRequest);
+}
+
+/** Put a claimed request back in the queue without counting the attempt (e.g. its full scan has to wait). */
+export async function requeueScanRequest(db: Db, address: string) {
+  await db.run(`UPDATE scan_requests SET status = 'queued', attempts = MAX(0, attempts - 1), updated_at = ? WHERE token = ?`, [nowIso(), lc(address)]);
+}
+
+/** Quick-scanned tokens whose curve or pool is one of these (to find launches gaining traction). */
+export async function quickScannedByPool(db: Db, pools: string[]): Promise<{ address: string; pool: string }[]> {
+  const out: { address: string; pool: string }[] = [];
+  for (let i = 0; i < pools.length; i += 90) {
+    const chunk = pools.slice(i, i + 90).map(lc);
+    const rows = await db.all<{ address: string; pool: string }>(
+      `SELECT address, pool FROM tokens WHERE scan_depth = 'quick' AND pool IN (${chunk.map(() => '?').join(', ')})`,
+      chunk,
+    );
+    out.push(...rows);
+  }
+  return out;
 }
 
 export async function finishScanRequest(db: Db, address: string, status: Exclude<ScanRequestStatus, 'scanning'>, error?: string) {

@@ -14,7 +14,8 @@ export interface RawLog {
 }
 
 export interface LogFilter {
-  address: Address;
+  /** Omit to match every contract (e.g. all Pons curves at once). */
+  address?: Address;
   /** topics[i] = exact topic, list of alternatives, or null for "any". */
   topics: (Hex | Hex[] | null)[];
 }
@@ -51,7 +52,7 @@ export async function getLogsChunked(
     try {
       const logs = (await rpc.request({
         method: 'eth_getLogs',
-        params: [{ address: filter.address, topics: filter.topics, fromBlock: toHex(cursor), toBlock: toHex(end) }],
+        params: [{ ...(filter.address ? { address: filter.address } : {}), topics: filter.topics, fromBlock: toHex(cursor), toBlock: toHex(end) }],
       })) as RpcLog[];
       for (const l of logs) {
         out.push({

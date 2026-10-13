@@ -1,12 +1,12 @@
 /** scanToken: the one function the CLI, the website and the jobs call. */
 import { getAddress, isAddress, type Address } from 'viem';
 import { PonsAdapter } from '../adapters/pons';
-import type { LaunchpadAdapter } from '../adapters/types';
+import type { LaunchHint, LaunchIndex, LaunchpadAdapter } from '../adapters/types';
 import { runChecks } from '../checks';
 import type { EngineContext } from '../context';
 import { buildReport } from '../report/build';
 import { ENGINE_CONFIG, type EngineConfig } from '../scoring/config';
-import type { CreatorSnapshot, LaunchInfo, ScanReport } from '../types';
+import type { CreatorProfile, CreatorSnapshot, LaunchInfo, ScanDepth, ScanReport } from '../types';
 import { cleanMetadata, type TokenMetadata } from '../util/media';
 import { collectScanData } from './collect';
 import { buildCreatorSnapshot } from './creator';
@@ -34,18 +34,32 @@ export interface FullScan {
   creator: CreatorSnapshot;
 }
 
+export interface ScanOptions {
+  cfg?: EngineConfig;
+  adapter?: LaunchpadAdapter;
+  /** Default 'full'. The ingest job quick-scans every launch and runs full scans when there is a reason. */
+  depth?: ScanDepth;
+  /** Known launch tx (from the factory event): skips looking it up. */
+  hint?: LaunchHint;
+  /** Our own launch index: creator history without explorer searches. */
+  launchIndex?: LaunchIndex;
+  /** A stored profile of the creator wallet. */
+  knownCreator?: (address: Address) => Promise<CreatorProfile | null>;
+}
+
 /** Scan and also return launch info + metadata (used by the ingest job). */
-export async function scanTokenFull(
-  ctx: EngineContext,
-  input: string,
-  opts: { cfg?: EngineConfig; adapter?: LaunchpadAdapter } = {},
-): Promise<FullScan> {
+export async function scanTokenFull(ctx: EngineContext, input: string, opts: ScanOptions = {}): Promise<FullScan> {
   const token = normalizeAddress(input);
   if (!token) throw new InvalidAddressError(input);
   const cfg = opts.cfg ?? ENGINE_CONFIG;
   const adapter = opts.adapter ?? new PonsAdapter(ctx);
 
-  const data = await collectScanData(ctx, adapter, token, cfg);
+  const data = await collectScanData(ctx, adapter, token, cfg, {
+    depth: opts.depth,
+    hint: opts.hint,
+    launchIndex: opts.launchIndex,
+    knownCreator: opts.knownCreator,
+  });
   const checks = runChecks(data, cfg);
   const metadata = await adapter
     .readTokenMetadata(data.launch)
@@ -57,10 +71,6 @@ export async function scanTokenFull(
   return { report: buildReport(data, checks, cfg, notes), launch: data.launch, metadata, creator: buildCreatorSnapshot(data) };
 }
 
-export async function scanToken(
-  ctx: EngineContext,
-  input: string,
-  opts: { cfg?: EngineConfig; adapter?: LaunchpadAdapter } = {},
-): Promise<ScanReport> {
+export async function scanToken(ctx: EngineContext, input: string, opts: ScanOptions = {}): Promise<ScanReport> {
   return (await scanTokenFull(ctx, input, opts)).report;
 }

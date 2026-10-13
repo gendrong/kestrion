@@ -33,6 +33,7 @@ export function toScanRecord(full: FullScan): ScanRecord {
       curve_progress: curve ? curve.progressPct : null,
       graduated: curve?.graduated ?? false,
       stage: stageOf(curve ? { graduated: curve.graduated, progressPct: curve.progressPct } : null),
+      depth: report.scanDepth ?? 'full',
     },
   };
 }

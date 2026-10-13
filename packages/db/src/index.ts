@@ -3,3 +3,4 @@ export * from './repo';
 export * from './feed';
 export * from './creators';
 export * from './pages';
+export * from './launchIndex';

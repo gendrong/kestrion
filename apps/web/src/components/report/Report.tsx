@@ -15,7 +15,8 @@ const External = ({ href, children }: { href: string; children: React.ReactNode 
   </a>
 );
 
-export function Report({ report }: { report: ScanReport }) {
+export function Report({ report, fullScanQueued = false }: { report: ScanReport; fullScanQueued?: boolean }) {
+  const quick = report.scanDepth === 'quick';
   const style = LABEL_STYLE[report.label];
   const checksById = Object.fromEntries(report.checks.map((c) => [c.id, c])) as Record<string, ScoredCheck>;
 
@@ -47,13 +48,20 @@ export function Report({ report }: { report: ScanReport }) {
             </span>
             <div className="flex flex-col gap-1.5 pb-1.5">
               <span className={`self-start rounded-full px-3 py-1 text-sm font-bold ${style.badge}`}>{report.label}</span>
-              <span className="text-sm text-muted">Score out of 100</span>
+              <span className="text-sm text-muted">Score out of 100 · {quick ? 'Quick scan' : 'Full scan'}</span>
             </div>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-line-soft" role="img" aria-label={`Score ${report.score} out of 100`}>
             <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${report.score}%` }} />
           </div>
           <p className="text-[17px] leading-relaxed text-ink-2">{report.summary}</p>
+          {quick && (
+            <p className="rounded-xl bg-paper p-3 text-sm text-ink-2">
+              <strong className="text-ink">Quick scan.</strong> Every launch gets one within minutes. The funding of early
+              buyers and the outcome of the creator&apos;s earlier launches are checked in a full scan
+              {fullScanQueued ? ', which is now queued: this report updates once it has run (full scans run while the day’s explorer budget allows).' : '.'}
+            </p>
+          )}
 
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-line-soft pt-4 text-sm sm:grid-cols-4">
             <div>

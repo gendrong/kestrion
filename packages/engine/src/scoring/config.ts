@@ -69,7 +69,7 @@ export interface EngineConfig {
 export const ENGINE_CONFIG: EngineConfig = {
   earlyWindowBlocks: 300,
   maxLinkedCandidates: 20,
-  maxPriorLaunchesAnalyzed: 10,
+  maxPriorLaunchesAnalyzed: 5,
   maxFlowWallets: 15,
   checks: {
     exemptions: { warnAtCount: 1, failAtCount: 10, failAtSupplyPct: 5, failIfLinkedToCreator: true },

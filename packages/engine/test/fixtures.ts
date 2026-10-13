@@ -68,6 +68,7 @@ export function makeData(over: Partial<ScanData> = {}): ScanData {
     now: LAUNCH_TIME + 3600,
     latestBlock: 100_000n,
     earlyWindowBlocks: 300,
+    depth: 'full',
     curve: ok({ raised: 10n ** 17n, threshold: 42n * 10n ** 17n, progressPct: 2.38, graduated: false, phase: 'NotGraduated' }),
     earlyTrades: ok([]),
     exemptions: ok({ windowSeconds: 3, declared: [], detected: [], autoExempt: [CREATOR], complete: true }),

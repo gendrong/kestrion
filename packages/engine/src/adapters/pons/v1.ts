@@ -8,7 +8,7 @@ import type { EngineContext } from '../../context';
 import type { CurveState, FactoryId, LaunchInfo, PriorLaunch, Trade } from '../../types';
 import { pct, uniqAddrs } from '../../util/format';
 import { mapLimit } from '../../util/limiter';
-import type { DiscoveredLaunch, PriorLaunchRef } from '../types';
+import type { DiscoveredLaunch, LaunchHint, PriorLaunchRef } from '../types';
 import { contractLogs, isContract, locateLaunch, ranges, readPair, readTokenBasics } from './common';
 
 export const V1_FACTORIES = [
@@ -42,13 +42,13 @@ async function graduationStatus(ctx: EngineContext, factory: Address, token: Add
   return { pairedPrincipal, threshold, graduated };
 }
 
-export async function findLaunchV1(ctx: EngineContext, token: Address): Promise<LaunchInfo | null> {
+export async function findLaunchV1(ctx: EngineContext, token: Address, hint: LaunchHint = {}): Promise<LaunchInfo | null> {
   for (const f of V1_FACTORIES) {
     const lt = await ctx.rpc.readContract({ address: f.address, abi: ponsV1FactoryAbi, functionName: 'getLaunchedToken', args: [token] });
     const exists = lt[11];
     if (!exists) continue;
 
-    const located = await locateLaunch(ctx, { factory: f.address, topic0: TOPICS.v1TokenLaunched, token });
+    const located = await locateLaunch(ctx, { factory: f.address, topic0: TOPICS.v1TokenLaunched, token, txHash: hint.txHash });
     const ev = decodeEventLog({ abi: ponsV1FactoryAbi, data: located.log.data, topics: located.log.topics as [Hex, ...Hex[]] });
     if (ev.eventName !== 'TokenLaunched') throw new Error('Unexpected launch event');
     const a = ev.args;
@@ -136,8 +136,8 @@ export async function discoverLaunchesV1(ctx: EngineContext, factoryId: FactoryI
   const logs = await getLogsChunked(ctx.rpc, { address: f.address, topics: [TOPICS.v1TokenLaunched] }, fromBlock, toBlock);
   return logs.map((l) => {
     const ev = decodeEventLog({ abi: ponsV1FactoryAbi, data: l.data, topics: l.topics as [Hex, ...Hex[]] });
-    const a = ev.args as { token: Address; deployer: Address };
-    return { factoryId, token: a.token, deployer: a.deployer, blockNumber: l.blockNumber, txHash: l.transactionHash };
+    const a = ev.args as { token: Address; deployer: Address; pool: Address; pairToken: Address };
+    return { factoryId, token: a.token, deployer: a.deployer, blockNumber: l.blockNumber, txHash: l.transactionHash, curveOrPool: a.pool, pairToken: a.pairToken };
   });
 }
 

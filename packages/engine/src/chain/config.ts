@@ -103,6 +103,8 @@ export const VERIFIED_TOPICS = {
   v2PoolGraduated: '0x0a44ef75df69c534f43cd6c1aa3ef8983065fe5fe79ef9e79f6494e6f258c259',
   /** Uniswap v3 Swap. Source: docs.ponsfamily.com ("Swap (topic0)"). */
   v3Swap: '0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67',
+  /** ERC-20 Transfer(address indexed from, address indexed to, uint256 value). Source: EIP-20 (eips.ethereum.org/EIPS/eip-20). */
+  erc20Transfer: '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
 } as const;
 
 /** V2 graduation phases. Source: docs.ponsfamily.com/v2 ("Launch Phases"). */

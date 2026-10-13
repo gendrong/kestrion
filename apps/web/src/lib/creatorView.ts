@@ -1,9 +1,18 @@
 /**
  * Everything the creator page (and GET /api/v1/creator/:address) shows, built from the database only:
- * the stored creator profile (launches found on-chain) merged with the tokens we scanned.
+ * our index of every Pons launch, the stored creator profile (details from scans) and the tokens we scanned.
  */
 import 'server-only';
-import { getCreator, getCreatorTokens, type Creator, type Db, type FeedItem, type LinkedWalletRow } from '@kestrion/db';
+import {
+  getCreator,
+  getCreatorTokens,
+  launchesByDeployers,
+  type Creator,
+  type Db,
+  type FeedItem,
+  type IndexedLaunch,
+  type LinkedWalletRow,
+} from '@kestrion/db';
 
 export type Outcome = 'graduated' | 'died_fast' | 'no_fast_drop' | 'unknown';
 
@@ -53,7 +62,7 @@ function outcomeOf(graduated: boolean | null | undefined, diedFast: boolean | nu
   return 'unknown';
 }
 
-export function buildCreatorView(address: string, creator: Creator | null, tokens: FeedItem[]): CreatorView {
+export function buildCreatorView(address: string, creator: Creator | null, tokens: FeedItem[], indexed: IndexedLaunch[] = []): CreatorView {
   const byToken = new Map(tokens.map((t) => [t.address.toLowerCase(), t]));
   const launches: CreatorLaunchView[] = [];
   const listed = new Set<string>();
@@ -72,6 +81,23 @@ export function buildCreatorView(address: string, creator: Creator | null, token
       score: t?.score ?? null,
       label: t?.label ?? null,
       outcome: outcomeOf(t?.graduated || l.graduated, l.diedFast),
+    });
+  }
+  // Launches from our index that the stored profile doesn't list (its list comes from the last scan).
+  for (const l of indexed) {
+    if (listed.has(l.token)) continue;
+    const t = byToken.get(l.token);
+    listed.add(l.token);
+    launches.push({
+      token: l.token,
+      name: t?.name ?? null,
+      symbol: t?.symbol ?? null,
+      factoryId: l.factory,
+      launchTime: t?.launchTime ?? l.launchTime,
+      logoCid: t?.logoCid ?? null,
+      score: t?.score ?? null,
+      label: t?.label ?? null,
+      outcome: outcomeOf(t?.graduated, null),
     });
   }
   // Scanned tokens the stored launch list doesn't have yet (e.g. launched after the last search).
@@ -95,8 +121,8 @@ export function buildCreatorView(address: string, creator: Creator | null, token
   const known = launches.filter((l) => l.outcome === 'died_fast' || l.outcome === 'no_fast_drop' || l.outcome === 'graduated');
   return {
     address: address.toLowerCase(),
-    known: !!creator || tokens.length > 0,
-    historyPending: !creator || creator.launches.length === 0,
+    known: !!creator || tokens.length > 0 || indexed.length > 0,
+    historyPending: indexed.length === 0 && (!creator || creator.launches.length === 0),
     firstSeen: creator?.firstSeen ?? null,
     fundingSource: creator?.fundingSource ?? null,
     funder: creator?.funder ?? null,
@@ -117,6 +143,10 @@ export function buildCreatorView(address: string, creator: Creator | null, token
 }
 
 export async function loadCreatorView(db: Db, address: string): Promise<CreatorView> {
-  const [creator, tokens] = await Promise.all([getCreator(db, address), getCreatorTokens(db, address)]);
-  return buildCreatorView(address, creator, tokens);
+  const [creator, tokens, indexed] = await Promise.all([
+    getCreator(db, address),
+    getCreatorTokens(db, address),
+    launchesByDeployers(db, [address]).catch(() => []),
+  ]);
+  return buildCreatorView(address, creator, tokens, indexed);
 }

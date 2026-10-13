@@ -5,7 +5,7 @@ import type { EngineContext } from '../../context';
 import type { EngineConfig } from '../../scoring/config';
 import type { CurveState, ExemptionData, FactoryId, LaunchInfo, PriorLaunch, Trade } from '../../types';
 import type { TokenMetadata } from '../../util/media';
-import type { DiscoveredLaunch, FactoryInfo, LaunchpadAdapter, PriorLaunchRef } from '../types';
+import type { DiscoveredLaunch, FactoryInfo, LaunchHint, LaunchpadAdapter, PriorLaunchRef } from '../types';
 import { readTokenMetadata } from './metadata';
 import {
   describePriorLaunchV1,
@@ -31,14 +31,14 @@ export class PonsAdapter implements LaunchpadAdapter {
   readonly id = 'pons';
   readonly factories: FactoryInfo[] = [
     { id: 'pons-v2', address: PONS_V2.factory, startBlock: PONS_V2.deployBlock, version: 'v2' },
-    { id: 'pons-v1-active', address: PONS_V1_ACTIVE.factory, startBlock: PONS_V1_ACTIVE.startBlock, version: 'v1' },
-    { id: 'pons-v1-legacy', address: PONS_V1_LEGACY.factory, startBlock: PONS_V1_LEGACY.startBlock, version: 'v1' },
+    { id: 'pons-v1-active', address: PONS_V1_ACTIVE.factory, startBlock: PONS_V1_ACTIVE.startBlock, endBlock: PONS_V1_ACTIVE.closedAtBlock, version: 'v1' },
+    { id: 'pons-v1-legacy', address: PONS_V1_LEGACY.factory, startBlock: PONS_V1_LEGACY.startBlock, endBlock: PONS_V1_LEGACY.closedAtBlock, version: 'v1' },
   ];
 
   constructor(private readonly ctx: EngineContext) {}
 
-  async findLaunch(token: Address): Promise<LaunchInfo | null> {
-    return (await findLaunchV2(this.ctx, token)) ?? (await findLaunchV1(this.ctx, token));
+  async findLaunch(token: Address, hint: LaunchHint = {}): Promise<LaunchInfo | null> {
+    return (await findLaunchV2(this.ctx, token, hint)) ?? (await findLaunchV1(this.ctx, token, hint));
   }
 
   discoverLaunches(factoryId: FactoryId, fromBlock: bigint, toBlock: bigint): Promise<DiscoveredLaunch[]> {
@@ -73,8 +73,10 @@ export class PonsAdapter implements LaunchpadAdapter {
     return { refs: [...v2.refs, ...v1.refs], partial: v2.partial || v1.partial };
   }
 
-  describePriorLaunch(ref: PriorLaunchRef, cfg: EngineConfig, now: number): Promise<PriorLaunch> {
-    return ref.factoryId === 'pons-v2' ? describePriorLaunchV2(this.ctx, ref, cfg, now) : describePriorLaunchV1(this.ctx, ref);
+  describePriorLaunch(ref: PriorLaunchRef, cfg: EngineConfig, now: number, opts: { outcome?: boolean } = {}): Promise<PriorLaunch> {
+    return ref.factoryId === 'pons-v2'
+      ? describePriorLaunchV2(this.ctx, ref, cfg, now, opts.outcome ?? true)
+      : describePriorLaunchV1(this.ctx, ref);
   }
 
   readTokenMetadata(launch: LaunchInfo): Promise<TokenMetadata> {

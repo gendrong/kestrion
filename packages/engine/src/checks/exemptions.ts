@@ -61,7 +61,7 @@ export function checkExemptions(d: ScanData, cfg: EngineConfig): CheckResult {
     count >= c.failAtCount || (c.failIfLinkedToCreator && funded.length > 0) || supplyPct >= c.failAtSupplyPct;
   const parts = [`${atLeast}${plural(count, 'wallet')} exempt from the ${ex.windowSeconds}s launch snipe tax`];
   if (funded.length > 0) parts.push(`${funded.length} funded by or sharing funds with the creator (traced up to 2 hops)`);
-  else parts.push(d.linked.ok ? 'none traced to the creator’s funding' : 'funding not traced');
+  else parts.push(d.linked.ok ? 'none traced to the creator’s funding' : d.depth === 'quick' ? 'their funding is traced in a full scan' : 'funding not traced');
   parts.push(`together they bought ${supplyPct}% of supply in the first ${d.earlyWindowBlocks} blocks`);
   const first = parts.join('; ');
   return {

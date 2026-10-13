@@ -150,3 +150,53 @@ describe('share images', () => {
     expect(await getOgImage(db, addr(2))).toBeNull();
   });
 });
+
+describe('launch index', () => {
+  it('stores launches in chunks, ignores duplicates and finds them by deployer', async () => {
+    const { insertLaunches, launchesByDeployers, getIndexedLaunch } = await import('../src/launchIndex');
+    const rows = Array.from({ length: 30 }, (_, i) => ({
+      token: upper(addr(0x5000 + i)),
+      factory: 'pons-v2',
+      deployer: i % 3 === 0 ? CREATOR : addr(0xd0),
+      curveOrPool: addr(0x6000 + i),
+      pairToken: addr(0),
+      graduationThreshold: '4200000000000000000',
+      launchBlock: 1000 + i,
+      launchTime: null,
+      txHash: `0x${'ab'.repeat(32)}`,
+    }));
+    await insertLaunches(db, rows);
+    await insertLaunches(db, rows.slice(0, 5));
+    const mine = await launchesByDeployers(db, [upper(CREATOR)]);
+    expect(mine).toHaveLength(10);
+    expect(mine[0]!.launchBlock).toBe(1027);
+    expect((await getIndexedLaunch(db, addr(0x5001)))?.deployer).toBe(addr(0xd0));
+  });
+});
+
+describe('scan depth in the queue', () => {
+  it('a full-scan request upgrades a finished quick one; a quick scan does not close a full request', async () => {
+    const { claimScanRequests, enqueueScan, getScanRequest, requeueScanRequest } = await import('../src/repo');
+    const t = addr(0x77);
+    await enqueueScan(db, t, 'quick');
+    await claimScanRequests(db, 5);
+    await recordScan(db, { ...rec(0x77), scan: { ...rec(0x77).scan, depth: 'quick' } });
+    expect(await getScanRequest(db, t)).toMatchObject({ status: 'done', depth: 'quick' });
+
+    expect(await enqueueScan(db, t, 'full')).toMatchObject({ status: 'queued', depth: 'full', attempts: 0 });
+    // Credits low: a full request for a token that already has a report waits.
+    expect(await claimScanRequests(db, 5, { fullAllowed: false })).toEqual([]);
+    const [claimed] = await claimScanRequests(db, 5, { fullAllowed: true });
+    expect(claimed).toMatchObject({ token: t, depth: 'full' });
+    await recordScan(db, { ...rec(0x77), scan: { ...rec(0x77).scan, depth: 'quick' } });
+    expect((await getScanRequest(db, t))?.status).toBe('scanning');
+    await requeueScanRequest(db, t);
+    expect(await getScanRequest(db, t)).toMatchObject({ status: 'queued', attempts: 0 });
+    const [again] = await claimScanRequests(db, 5);
+    expect(again?.token).toBe(t);
+    await recordScan(db, { ...rec(0x77), scan: { ...rec(0x77).scan, depth: 'full' } });
+    expect((await getScanRequest(db, t))?.status).toBe('done');
+    const [tok] = await db.all<{ scan_depth: string }>('SELECT scan_depth FROM tokens WHERE address = ?', [t]);
+    expect(tok?.scan_depth).toBe('full');
+  });
+});

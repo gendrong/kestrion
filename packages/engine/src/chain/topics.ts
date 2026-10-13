@@ -11,4 +11,5 @@ export const TOPICS = {
   v2SnipeTaxExempted: toEventSelector('SnipeTaxExempted(address)'),
   v2PoolGraduated: toEventSelector('PoolGraduated(address,uint256,uint256,uint256)'),
   v3Swap: toEventSelector('Swap(address,address,int256,int256,uint160,uint128,int24)'),
+  erc20Transfer: toEventSelector('Transfer(address,address,uint256)'),
 } as const;
