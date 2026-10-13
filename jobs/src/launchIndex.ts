@@ -76,7 +76,8 @@ export async function extendIndex(
       try {
         const found = await Promise.all(steps.map(([a, b]) => adapter.discoverLaunches(f.id, a, b).then((l) => ({ a, b, l }))));
         for (const s of found) {
-          const times = await estimateTimes(ctx, s.a, s.b, s.l);
+          // Times are a nice-to-have: a failed block read must not stop the backfill.
+          const times = await estimateTimes(ctx, s.a, s.b, s.l).catch(() => new Map<string, string>());
           await insertLaunches(db, s.l.map((l) => toRow(l, times.get(l.token.toLowerCase()) ?? null)));
           added += s.l.length;
         }
