@@ -7,7 +7,8 @@
   "scripts": {
     "ingest": "tsx src/ingest.ts",
     "typecheck": "tsc --noEmit",
-    "og:default": "tsx src/og-default.ts"
+    "og:default": "tsx src/og-default.ts",
+    "rescan:test": "tsx src/rescan-test.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",

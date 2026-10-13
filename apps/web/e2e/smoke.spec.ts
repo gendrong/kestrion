@@ -80,10 +80,9 @@ test('stored report renders (E2E_LIVE=1, needs the database)', async ({ page }, 
 
 // Phase 4: creator pages, /today, /about, share images.
 
-test('header links to Today and About', async ({ page }) => {
+test('header links to Today, footer links to About', async ({ page }) => {
   await page.goto('/');
-  const nav = page.getByRole('navigation', { name: 'Main' });
-  await nav.getByRole('link', { name: 'About' }).click();
+  await page.getByRole('navigation', { name: 'Footer' }).getByRole('link', { name: 'How scoring works' }).click();
   await expect(page).toHaveURL('/about');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('How the score');
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Today' }).click();
@@ -123,4 +122,33 @@ test('pages carry share metadata', async ({ page }) => {
   await page.goto('/about');
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', /\/og-default\.png$/);
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
+});
+
+// Phase 5: accounts, watchlist, notifications.
+
+test('watchlist and notifications ask to sign in', async ({ page }) => {
+  await page.goto('/watchlist');
+  await expect(page.getByRole('button', { name: 'Sign in with your wallet' })).toBeVisible();
+  await page.goto('/notifications');
+  await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in with your wallet' })).toBeVisible();
+});
+
+test('header shows a sign-in button when signed out', async ({ page }) => {
+  await page.goto('/about');
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Sign in' })).toBeVisible();
+});
+
+test('account API: signed out, and changes need a same-origin request', async ({ request }) => {
+  expect(await (await request.get('/api/me')).json()).toEqual({ user: null });
+  expect((await request.post('/api/watchlist', { data: { token: '0x' + '1'.repeat(40), action: 'add' } })).status()).toBe(403);
+  const origin = { headers: { origin: 'http://localhost:3100' } };
+  expect((await request.post('/api/watchlist', { ...origin, data: { token: '0x' + '1'.repeat(40), action: 'add' } })).status()).toBe(401);
+  expect((await request.post('/api/auth/verify', { ...origin, data: { message: 'hi', signature: '0x12' } })).status()).toBeGreaterThanOrEqual(400);
+});
+
+test('rescan API validates the address', async ({ request }) => {
+  const res = await request.post('/api/v1/scan/hello');
+  expect(res.status()).toBe(400);
+  expect((await res.json()).error.code).toBe('invalid_address');
 });

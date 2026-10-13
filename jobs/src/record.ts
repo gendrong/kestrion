@@ -2,7 +2,7 @@
 import type { FullScan } from '@kestrion/engine';
 import { stageOf, type ScanRecord } from '@kestrion/db';
 
-export function toScanRecord(full: FullScan): ScanRecord {
+export function toScanRecord(full: FullScan, changeReason?: string): ScanRecord {
   const { report, launch, metadata } = full;
   const curve = report.curve;
   return {
@@ -34,6 +34,7 @@ export function toScanRecord(full: FullScan): ScanRecord {
       graduated: curve?.graduated ?? false,
       stage: stageOf(curve ? { graduated: curve.graduated, progressPct: curve.progressPct } : null),
       depth: report.scanDepth ?? 'full',
+      change_reason: changeReason,
     },
   };
 }

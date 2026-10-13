@@ -15,7 +15,19 @@ const External = ({ href, children }: { href: string; children: React.ReactNode 
   </a>
 );
 
-export function Report({ report, fullScanQueued = false }: { report: ScanReport; fullScanQueued?: boolean }) {
+export function Report({
+  report,
+  fullScanQueued = false,
+  actions,
+  history,
+}: {
+  report: ScanReport;
+  fullScanQueued?: boolean;
+  /** Watch / rescan buttons (rendered by the page, which knows the signed-in user). */
+  actions?: React.ReactNode;
+  /** Score history chart. */
+  history?: React.ReactNode;
+}) {
   const quick = report.scanDepth === 'quick';
   const style = LABEL_STYLE[report.label];
   const checksById = Object.fromEntries(report.checks.map((c) => [c.id, c])) as Record<string, ScoredCheck>;
@@ -87,6 +99,7 @@ export function Report({ report, fullScanQueued = false }: { report: ScanReport;
             <External href={LINKS.ponsToken(report.token.address)}>View on Pons</External>
             <External href={LINKS.explorerToken(report.token.address)}>Explorer</External>
           </div>
+          {actions && <div className="flex flex-wrap items-start gap-3 border-t border-line-soft pt-4">{actions}</div>}
           <div className="border-t border-line-soft pt-4">
             <ShareButton
               url={`${SITE_URL}/t/${report.token.address.toLowerCase()}`}
@@ -110,6 +123,7 @@ export function Report({ report, fullScanQueued = false }: { report: ScanReport;
       </div>
 
       <aside className="flex min-w-0 flex-col gap-6">
+        {history}
         <CreatorCard report={report} wallet={checksById.creatorWallet} history={checksById.creatorHistory} />
         <HoldersCard report={report} />
         {report.notes.length > 0 && (

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import localFont from 'next/font/local';
 import Link from 'next/link';
 import { Logo, LogoMark } from '@/components/Logo';
+import { AccountMenu } from '@/components/wallet/AccountMenu';
 import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL } from '@/lib/site';
 import './globals.css';
 
@@ -51,15 +52,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Logo />
             </Link>
             <nav aria-label="Main" className="flex items-center gap-1 text-[15px] font-medium">
-              <Link href="/#feed" className="rounded-lg px-2.5 py-2.5 text-ink hover:text-ink-2 sm:px-3">
+              <Link href="/#feed" className="hidden rounded-lg px-3 py-2.5 text-ink hover:text-ink-2 sm:inline-block">
                 Live
               </Link>
               <Link href="/today" className="rounded-lg px-2.5 py-2.5 text-ink hover:text-ink-2 sm:px-3">
                 Today
               </Link>
-              <Link href="/about" className="rounded-lg px-2.5 py-2.5 text-ink-3 hover:text-ink sm:px-3">
+              <Link href="/about" className="hidden rounded-lg px-3 py-2.5 text-ink-3 hover:text-ink sm:inline-block">
                 About
               </Link>
+              <span className="ml-1">
+                <AccountMenu />
+              </span>
             </nav>
           </div>
         </header>
@@ -74,6 +78,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <LogoMark size={28} />
               <span className="font-display text-lg font-bold tracking-[-0.03em]">Kestrion</span>
             </div>
+            <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-1 text-[15px] font-medium">
+              <Link href="/#feed" className="py-2 hover:underline">
+                Live launches
+              </Link>
+              <Link href="/today" className="py-2 hover:underline">
+                Today
+              </Link>
+              <Link href="/watchlist" className="py-2 hover:underline">
+                Watchlist
+              </Link>
+              <Link href="/about" className="py-2 hover:underline">
+                How scoring works
+              </Link>
+            </nav>
             <p className="text-sm font-semibold">Data, not advice. DYOR.</p>
             <p className="text-sm text-ink-2">Read-only: Kestrion never holds keys or sends transactions.</p>
             <p className="text-[13px] text-muted">Kestrion is independent and not affiliated with Robinhood Markets or Pons Labs.</p>

@@ -1,5 +1,5 @@
 import type { ScanReport } from '@kestrion/engine/types';
-import { enqueueScan, getLatestScan, isKnownCreator, WALLET_MARK } from '@kestrion/db';
+import { enqueueScan, getLatestScan, getScoreHistory, isKnownCreator, isWatching, WALLET_MARK } from '@kestrion/db';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import Link from 'next/link';
@@ -13,6 +13,9 @@ import { getDb } from '@/lib/db';
 import { shortAddr } from '@/lib/format';
 import { rateLimit } from '@/lib/rateLimit';
 import { addressKind } from '@/lib/resolve';
+import { ScoreHistory } from '@/components/report/ScoreHistory';
+import { RescanButton, WatchButton } from '@/components/wallet/ToggleButtons';
+import { currentUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +82,21 @@ async function Body({ address }: { address: string | null }) {
     if (latest.report.scanDepth === 'quick' && (await rateLimit('enqueue', await headers())).ok) {
       fullScanQueued = await enqueueScan(db, address, 'full').then(() => true, () => false);
     }
-    return <Report report={latest.report} fullScanQueued={fullScanQueued} />;
+    const [user, history] = await Promise.all([currentUser(db), getScoreHistory(db, address).catch(() => [])]);
+    const watching = user ? await isWatching(db, user.wallet, address) : false;
+    return (
+      <Report
+        report={latest.report}
+        fullScanQueued={fullScanQueued}
+        actions={
+          <>
+            <WatchButton token={address} watching={watching} signedIn={!!user} />
+            <RescanButton token={address} />
+          </>
+        }
+        history={<ScoreHistory points={history} />}
+      />
+    );
   }
 
   // Not a scanned token. A wallet (known creator, or an address without contract code) goes to its creator page.

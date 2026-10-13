@@ -83,6 +83,17 @@ export async function recordScan(db: Db, rec: ScanRecord): Promise<void> {
       params: [s.score, s.change_reason ?? null, s.scanned_at, address, s.score],
     },
     {
+      // Everyone watching the token hears about the change (also before the token row is updated below).
+      sql: `INSERT INTO notifications (user_wallet, type, token, message, created_at)
+            SELECT w.user_wallet, 'score_changed', t.address,
+                   substr(CASE WHEN t.name <> '' THEN t.name ELSE t.symbol END, 1, 60) || ' ($' || substr(t.symbol, 1, 20) || '): score '
+                     || t.score || ' → ' || CAST(? AS INTEGER) || COALESCE(' · ' || ?, ''),
+                   ?
+              FROM watchlist w JOIN tokens t ON t.address = w.token
+             WHERE w.token = ? AND t.score IS NOT NULL AND t.score <> ?`,
+      params: [s.score, s.change_reason ?? null, s.scanned_at, address, s.score],
+    },
+    {
       sql: `INSERT INTO scans (token, scanned_at, score, label, checks, report, engine_version, summary)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [address, s.scanned_at, s.score, s.label, JSON.stringify(s.checks), JSON.stringify(reportWithoutChecks), s.engine_version, s.summary],

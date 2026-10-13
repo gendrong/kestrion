@@ -1,0 +1,45 @@
+# Manual test of "watchlisted token's score changed → notification" (jobs/src/rescan-test.ts).
+# Actions → rescan-test → Run workflow → paste a token address you watch; mode "tweaked" changes the score,
+# "normal" puts it back.
+name: rescan-test
+
+on:
+  workflow_dispatch:
+    inputs:
+      token:
+        description: Token address (one on your watchlist)
+        required: true
+      mode:
+        description: tweaked (score changes) or normal (back to the real score)
+        type: choice
+        options: [tweaked, normal]
+        default: tweaked
+
+concurrency:
+  group: rescan-test
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rescan-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci --workspace @kestrion/jobs --include-workspace-root --no-audit --no-fund
+      - name: Rescan
+        run: npm run rescan:test -w @kestrion/jobs -- "$TOKEN" $FLAG
+        env:
+          TOKEN: ${{ inputs.token }}
+          FLAG: ${{ inputs.mode == 'normal' && '--normal' || '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_DATABASE_ID: ${{ secrets.D1_DATABASE_ID }}
+          CLOUDFLARE_D1_TOKEN: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
+          BLOCKSCOUT_API_KEY: ${{ secrets.BLOCKSCOUT_API_KEY }}

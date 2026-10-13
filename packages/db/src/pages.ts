@@ -103,3 +103,57 @@ export async function pruneOgImages(db: Db, now = Date.now()): Promise<number> {
   const r = await db.run(`DELETE FROM og_images WHERE token IN (SELECT address FROM tokens WHERE launch_time < ?)`, [before]);
   return r.changes;
 }
+
+export interface RescanCandidate {
+  address: string;
+  depth: 'quick' | 'full';
+  watched: boolean;
+}
+
+/**
+ * Tokens due for a rescan: every watched token not scanned within `watchedEveryMs`, then tokens launched in the last
+ * `recentHours` not scanned within `recentEveryMs` (least recently scanned first).
+ */
+export async function rescanCandidates(
+  db: Db,
+  opts: { watchedEveryMs: number; recentHours: number; recentEveryMs: number; limit: number; now?: number },
+): Promise<RescanCandidate[]> {
+  const now = opts.now ?? Date.now();
+  const iso = (ms: number) => new Date(ms).toISOString();
+  const n = Math.max(1, Math.min(500, Math.floor(opts.limit)));
+  const [watched, recent] = await Promise.all([
+    db.all<{ address: string; scan_depth: string | null }>(
+      `SELECT address, scan_depth FROM tokens
+        WHERE address IN (SELECT DISTINCT token FROM watchlist) AND (last_scanned_at IS NULL OR last_scanned_at < ?)
+        ORDER BY last_scanned_at LIMIT ${n}`,
+      [iso(now - opts.watchedEveryMs)],
+    ),
+    db.all<{ address: string; scan_depth: string | null }>(
+      `SELECT address, scan_depth FROM tokens
+        WHERE launch_time >= ? AND last_scanned_at < ? AND address NOT IN (SELECT DISTINCT token FROM watchlist)
+        ORDER BY last_scanned_at LIMIT ${n}`,
+      [iso(now - opts.recentHours * 3_600_000), iso(now - opts.recentEveryMs)],
+    ),
+  ]);
+  const depth = (d: string | null) => (d === 'quick' ? 'quick' : 'full') as 'quick' | 'full';
+  return [
+    ...watched.map((r) => ({ address: r.address, depth: depth(r.scan_depth), watched: true })),
+    ...recent.map((r) => ({ address: r.address, depth: depth(r.scan_depth), watched: false })),
+  ].slice(0, n);
+}
+
+export interface ScorePoint {
+  scannedAt: string;
+  score: number;
+  label: string;
+  engineVersion: string;
+}
+
+/** Every stored scan's score for a token, oldest first (the report page's score history). */
+export async function getScoreHistory(db: Db, token: string, limit = 100): Promise<ScorePoint[]> {
+  const rows = await db.all<{ scanned_at: string; score: number; label: string; engine_version: string }>(
+    `SELECT scanned_at, score, label, engine_version FROM scans WHERE token = ? ORDER BY scanned_at DESC, id DESC LIMIT ${Math.max(1, Math.min(500, Math.floor(limit)))}`,
+    [lc(token)],
+  );
+  return rows.reverse().map((r) => ({ scannedAt: r.scanned_at, score: Number(r.score), label: r.label, engineVersion: r.engine_version }));
+}

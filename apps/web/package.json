@@ -18,10 +18,14 @@
   "dependencies": {
     "@kestrion/db": "*",
     "@kestrion/engine": "*",
+    "@rainbow-me/rainbowkit": "2.2.11",
+    "@tanstack/react-query": "5.104.0",
     "next": "^15.5.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "viem": "2.57.4",
+    "wagmi": "2.19.5"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.20.9",

@@ -1,4 +1,4 @@
-import { enqueueCreatorLookup } from '@kestrion/db';
+import { enqueueCreatorLookup, isFollowing } from '@kestrion/db';
 import { LINKS } from '@kestrion/engine/config';
 import { ENGINE_CONFIG } from '@kestrion/engine/scoring';
 import type { Metadata } from 'next';
@@ -14,6 +14,8 @@ import { getDb } from '@/lib/db';
 import { FACTORY_NAME, formatAge, FUNDING_LABEL, shortAddr, timeAgo } from '@/lib/format';
 import { rateLimit } from '@/lib/rateLimit';
 import { DEFAULT_OG_IMAGE } from '@/lib/site';
+import { FollowButton } from '@/components/wallet/ToggleButtons';
+import { currentUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,7 +77,7 @@ function Stat({ label, value, sub }: { label: string; value: React.ReactNode; su
   );
 }
 
-function Profile({ view }: { view: CreatorView }) {
+function Profile({ view, following, signedIn }: { view: CreatorView; following: boolean; signedIn: boolean }) {
   const s = view.stats;
   const ageDays = view.firstSeen ? (Date.now() - Date.parse(view.firstSeen)) / 86_400_000 : null;
   const diedPct = s.outcomeKnown > 0 ? Math.round((s.diedFast / s.outcomeKnown) * 100) : null;
@@ -91,19 +93,8 @@ function Profile({ view }: { view: CreatorView }) {
               </h1>
               <p className="font-mono text-[13px] break-all text-muted">{view.address}</p>
             </div>
-            {/* Follow creator: wired up with accounts in Phase 5. */}
-            <button
-              type="button"
-              disabled
-              aria-describedby="follow-note"
-              className="min-h-11 cursor-not-allowed rounded-xl border border-line px-4 font-display font-bold text-muted"
-            >
-              Follow creator
-            </button>
+            <FollowButton creator={view.address} following={following} signedIn={signedIn} />
           </div>
-          <p id="follow-note" className="-mt-3 text-[13px] text-muted">
-            Following creators comes with wallet sign-in soon.
-          </p>
 
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Stat label="Pons launches" value={`${s.launches}${s.launchesPartial ? '+' : ''}`} sub={`${s.scanned} scanned by Kestrion`} />
@@ -249,7 +240,9 @@ async function Body({ address }: { address: string | null }) {
   if (view.known) {
     // Scanned tokens but no on-chain search yet (e.g. profiles from before creator pages existed): look it up quietly.
     if (view.historyPending && (await rateLimit('enqueue', await headers())).ok) await enqueueCreatorLookup(db, address).catch(() => {});
-    return <Profile view={view} />;
+    const user = await currentUser(db);
+    const following = user ? await isFollowing(db, user.wallet, address) : false;
+    return <Profile view={view} following={following} signedIn={!!user} />;
   }
 
   const limit = await rateLimit('enqueue', await headers());
