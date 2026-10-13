@@ -107,10 +107,11 @@ export function createFailoverRpc(endpoints: RpcEndpoint[], opts: { timeoutMs?: 
     // Every endpoint's error, so a failure shows what the primary RPC said (not just the fallback's answer).
     const errors: string[] = [];
     for (const ep of order) {
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt < 4; attempt++) {
         try {
           const result = await postJsonRpc(ep, method, params ?? [], timeoutMs);
           ep.successes++;
+          ep.limiter?.recover();
           return result;
         } catch (e) {
           lastError = e;
@@ -122,7 +123,14 @@ export function createFailoverRpc(endpoints: RpcEndpoint[], opts: { timeoutMs?: 
           }
           if (e instanceof RpcHttpError) {
             ep.failures++;
-            if (e.status === 429 || (e.status !== undefined && e.status >= 500)) {
+            // 429, and 403 from the public RPC under load (seen 2026-10-13): too many requests, not a dead endpoint.
+            // Slow everyone down and retry instead of parking it (the fallback may have no credits left).
+            if (e.status === 429 || e.status === 403) {
+              ep.limiter?.slowDown();
+              await sleep(1500 * 2 ** attempt);
+              continue;
+            }
+            if (e.status !== undefined && e.status >= 500) {
               await sleep(600 * 2 ** attempt);
               continue;
             }

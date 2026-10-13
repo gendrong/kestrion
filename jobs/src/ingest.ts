@@ -109,8 +109,8 @@ const env = {
 const limiter = new RateLimiter(BLOCKSCOUT.requestsPerSecond);
 const budget = new CreditBudget();
 const shared = newSharedCaches();
-/** The public RPC rate-limits bursts (seen 2026-10-13 when quick scans ran 5 at a time): stay at ~20 requests/s. */
-const rpcLimiter = new RateLimiter(Number(process.env.INGEST_RPC_RPS ?? 20));
+/** The public RPC rate-limits bursts (seen 2026-10-13 when quick scans ran 5 at a time): start at ~10 requests/s and slow down when it answers 403/429. */
+const rpcLimiter = new RateLimiter(Number(process.env.INGEST_RPC_RPS ?? 10), 2);
 const newCtx = () => createEngineContext(env, () => {}, { blockscoutLimiter: limiter, budget, shared, rpcLimiter });
 
 type Outcome = 'scanned' | 'skipped' | 'not_a_launch' | 'failed';
