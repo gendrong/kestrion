@@ -6,6 +6,7 @@
  */
 import { getJobState, insertLaunches, launchesByDeployers, setJobState, type Db, type IndexedLaunch } from '@kestrion/db';
 import type { DiscoveredLaunch, EngineContext, LaunchIndex, PonsAdapter, PriorLaunchRef } from '@kestrion/engine';
+import { errText } from './errors';
 
 /** Blocks per step (the RPC answers ≤ 20k per eth_getLogs, so ~10 calls), and steps read in parallel. */
 const WINDOW = 200_000n;
@@ -82,7 +83,7 @@ export async function extendIndex(
         cursor = steps[steps.length - 1]![1];
         await setJobState(db, jobOf(f.id), { last_block: Number(cursor), status: cursor >= end ? 'ok' : 'partial', error: null, stats: { added } });
       } catch (e) {
-        const msg = (e as Error).message.split('\n')[0] ?? 'failed';
+        const msg = errText(e);
         log(`index ${f.id}: ERROR at block ${steps[0]?.[0]}: ${msg}`);
         await setJobState(db, jobOf(f.id), { status: 'error', error: msg.slice(0, 500) }).catch(() => {});
         break;

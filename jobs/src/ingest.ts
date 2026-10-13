@@ -64,6 +64,8 @@ import {
 } from '@kestrion/engine';
 import { extendIndex, indexDiscovered, launchIndexFor } from './launchIndex';
 import { toScanRecord } from './record';
+import { errText } from './errors';
+
 
 // Local runs read the root .env; on GitHub Actions the variables come from repository secrets.
 const rootEnv = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../.env');
@@ -148,8 +150,8 @@ async function scanAndStore(se: ScanEnv, token: string, depth: ScanDepth, txHash
     });
     await recordScan(db, toScanRecord(full));
     // Extras: a failure here never fails the scan itself.
-    await saveCreatorSnapshot(db, full.creator, token, full.report.scannedAt).catch((e) => log(`  ! creator profile ${token}: ${(e as Error).message}`));
-    await storeShareImage(db, full).catch((e) => log(`  ! share image ${token}: ${(e as Error).message}`));
+    await saveCreatorSnapshot(db, full.creator, token, full.report.scannedAt).catch((e) => log(`  ! creator profile ${token}: ${errText(e)}`));
+    await storeShareImage(db, full).catch((e) => log(`  ! share image ${token}: ${errText(e)}`));
     log(
       `  ✓ ${full.launch.symbol.slice(0, 12).padEnd(12)} ${token}  ${depth.padEnd(5)} score ${full.report.score} (${full.report.label}) in ${((Date.now() - t0) / 1000).toFixed(0)}s`,
     );
@@ -209,7 +211,7 @@ async function ingestFactory(se: ScanEnv, adapter: PonsAdapter, factoryId: Disco
 
   const launches = (await adapter.discoverLaunches(factoryId, from, to)).sort((a, b) => (a.blockNumber < b.blockNumber ? -1 : 1));
   log(`${factoryId}: blocks ${from}–${to}: ${launches.length} launch(es)`);
-  await indexDiscovered(db, newCtx(), launches, from, to).catch((e) => log(`  ! index: ${(e as Error).message}`));
+  await indexDiscovered(db, newCtx(), launches, from, to).catch((e) => log(`  ! index: ${errText(e)}`));
 
   const results = new Map<string, Outcome>();
   await runWithBudget(launches, async (l) => {
@@ -401,7 +403,7 @@ async function main() {
   const se: ScanEnv = { db, index: launchIndexFor(db, indexComplete), indexComplete };
 
   // 1. Wallets people looked up.
-  const lookups = await processCreatorLookups(se, adapter).catch((e) => (log(`wallet lookups: ERROR ${(e as Error).message}`), 0));
+  const lookups = await processCreatorLookups(se, adapter).catch((e) => (log(`wallet lookups: ERROR ${errText(e)}`), 0));
 
   // 2. Tokens people asked about on the website (bounded, so new launches still get most of the run).
   let queued = await processQueue(se, Date.now() + QUEUE_FIRST_MS);
@@ -411,7 +413,7 @@ async function main() {
   for (const f of adapter.factories) {
     try {
       const range = await ingestFactory(se, adapter, f.id, latest);
-      if (f.id === 'pons-v2') promoted = await promoteTraction(se, range.from, range.to).catch((e) => (log(`traction: ERROR ${(e as Error).message}`), 0));
+      if (f.id === 'pons-v2') promoted = await promoteTraction(se, range.from, range.to).catch((e) => (log(`traction: ERROR ${errText(e)}`), 0));
     } catch (e) {
       const msg = (e as Error).message.split('\n')[0] ?? 'failed';
       log(`${f.id}: ERROR ${msg}`);
