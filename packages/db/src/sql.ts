@@ -49,6 +49,8 @@ export interface D1HttpConfig {
   accountId: string;
   databaseId: string;
   apiToken: string;
+  /** Called with D1's per-statement usage (rows read / written), e.g. to track the free plan's daily quota. */
+  onUsage?: (u: { rowsRead: number; rowsWritten: number }) => void;
 }
 
 export class D1HttpError extends Error {
@@ -85,9 +87,14 @@ export function createD1HttpClient(cfg: D1HttpConfig): SqlClient {
       const json = (await res.json().catch(() => null)) as {
         success?: boolean;
         errors?: { message: string }[];
-        result?: { results?: Record<string, unknown>[]; meta?: { changes?: number } }[];
+        result?: { results?: Record<string, unknown>[]; meta?: { changes?: number; rows_read?: number; rows_written?: number } }[];
       } | null;
-      if (res.ok && json?.success) return json.result ?? [];
+      if (res.ok && json?.success) {
+        if (cfg.onUsage) {
+          for (const r of json.result ?? []) cfg.onUsage({ rowsRead: Number(r.meta?.rows_read ?? 0), rowsWritten: Number(r.meta?.rows_written ?? 0) });
+        }
+        return json.result ?? [];
+      }
       last = `HTTP ${res.status}: ${json?.errors?.map((e) => e.message).join('; ') ?? 'no body'}`;
       if (res.status === 429 || res.status >= 500) {
         await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));

@@ -5,12 +5,13 @@ import { getDb } from '@/lib/db';
 import { holderHint } from '@/lib/kest';
 import { rateLimit } from '@/lib/rateLimit';
 import { currentUser, sameOrigin } from '@/lib/session';
+import { withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
 const reply = (status: number, body: Record<string, unknown>) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
-export async function POST(req: Request) {
+export const POST = withPausedWrites(async function postHandler(req: Request) {
   if (!sameOrigin(req)) return reply(403, { error: 'Forbidden' });
   const limit = await rateLimit('api', req.headers);
   if (!limit.ok) return reply(429, { error: 'Too many requests' });
@@ -28,4 +29,4 @@ export async function POST(req: Request) {
   const r = await followCreator(db, user, creator);
   if (!r.ok) return reply(409, { error: `Your account can follow up to ${r.limit} creators. Unfollow one first.${user.tier === 'free' ? holderHint('more follows') : ''}`, limit: r.limit });
   return reply(200, { following: true, limit: TIERS[user.tier].follows });
-}
+});

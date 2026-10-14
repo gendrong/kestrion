@@ -6,12 +6,13 @@ import { kestTier } from '@/lib/kest';
 import { rateLimit } from '@/lib/rateLimit';
 import { hashToken, newSessionToken, sameOrigin, sessionCookie } from '@/lib/session';
 import { checkSiwe } from '@/lib/siwe';
+import { withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
 const fail = (status: number, error: string) => Response.json({ error }, { status, headers: { 'Cache-Control': 'no-store' } });
 
-export async function POST(req: Request) {
+export const POST = withPausedWrites(async function postHandler(req: Request) {
   if (!sameOrigin(req)) return fail(403, 'Forbidden');
   const limit = await rateLimit('enqueue', req.headers);
   if (!limit.ok) return fail(429, 'Too many sign-in attempts. Please wait a minute.');
@@ -35,4 +36,4 @@ export async function POST(req: Request) {
   await createSession(db, user.wallet, await hashToken(token));
   (await cookies()).set(sessionCookie(token));
   return Response.json({ address: user.wallet, tier: user.tier }, { headers: { 'Cache-Control': 'no-store' } });
-}
+});

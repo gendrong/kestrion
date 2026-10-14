@@ -5,12 +5,13 @@ import { getDb } from '@/lib/db';
 import { holderHint } from '@/lib/kest';
 import { rateLimit } from '@/lib/rateLimit';
 import { currentUser, sameOrigin } from '@/lib/session';
+import { withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
 const reply = (status: number, body: Record<string, unknown>) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 
-export async function POST(req: Request) {
+export const POST = withPausedWrites(async function postHandler(req: Request) {
   if (!sameOrigin(req)) return reply(403, { error: 'Forbidden' });
   const limit = await rateLimit('api', req.headers);
   if (!limit.ok) return reply(429, { error: 'Too many requests' });
@@ -29,4 +30,4 @@ export async function POST(req: Request) {
   const r = await addToWatchlist(db, user, token);
   if (!r.ok) return reply(409, { error: `Your account can watch up to ${r.limit} tokens. Remove one first.${user.tier === 'free' ? holderHint('a bigger watchlist') : ''}`, limit: r.limit });
   return reply(200, { watching: true, limit: TIERS[user.tier].watchlist });
-}
+});

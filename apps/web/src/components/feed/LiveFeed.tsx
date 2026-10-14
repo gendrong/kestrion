@@ -31,8 +31,8 @@ const SORTS: [SortOrder, string][] = [
   ['safest', 'Safest'],
   ['riskiest', 'Riskiest'],
 ];
-/** Feed refresh interval (paused while the tab is hidden). Each refresh = 1 DB read + 1 rate-limit command. */
-const REFRESH_MS = 60_000;
+/** Feed refresh interval (paused while the tab is hidden). Each refresh = 1 Worker request (free plan: 100k a day). */
+const REFRESH_MS = 120_000;
 
 function age(iso: string, now: number) {
   const s = Math.max(0, Math.floor((now - Date.parse(iso)) / 1000));

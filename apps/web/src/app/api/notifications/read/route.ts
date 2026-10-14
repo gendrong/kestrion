@@ -2,10 +2,11 @@
 import { markNotificationsRead } from '@kestrion/db';
 import { getDb } from '@/lib/db';
 import { currentUser, sameOrigin } from '@/lib/session';
+import { withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request) {
+export const POST = withPausedWrites(async function postHandler(req: Request) {
   if (!sameOrigin(req)) return Response.json({ error: 'Forbidden' }, { status: 403 });
   const db = getDb();
   const user = await currentUser(db);
@@ -14,4 +15,4 @@ export async function POST(req: Request) {
   const ids = Array.isArray(body.ids) ? body.ids.map(Number).filter(Number.isInteger) : undefined;
   await markNotificationsRead(db, user.wallet, ids);
   return Response.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } });
-}
+});

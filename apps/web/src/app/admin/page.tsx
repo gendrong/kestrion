@@ -27,6 +27,8 @@ function jobLine(j: JobState): string {
   if (j.job.startsWith('ingest:pons')) return `${s.launches ?? 0} launches · ${s.scanned ?? 0} scanned · ${s.failed ?? 0} failed`;
   if (j.job.startsWith('index:')) return `block ${j.last_block ?? '–'} · +${s.added ?? 0} this step`;
   if (j.job === 'explorer:credits') return `${s.remaining ?? '?'} credits left (${s.day ?? ''})`;
+  if (j.job === 'd1:usage') return `jobs wrote ${Number(s.rowsWritten ?? 0).toLocaleString('en-US')} of ${Number(s.limitWritten ?? 100000).toLocaleString('en-US')} rows today (${s.writtenPct ?? 0}%) · read ${Number(s.rowsRead ?? 0).toLocaleString('en-US')} rows`;
+  if (j.job === 'index:budget') return `backfill used ${s.used ?? 0} of ${s.limit ?? '?'} launches today`;
   if (j.job === 'rescan') return `${s.scanned ?? 0} rescanned · ${s.watchedDone ?? 0}/${s.watched ?? 0} watched · ${s.deferred ?? 0} waiting`;
   if (j.job === 'ingest:queue') return `${s.processed ?? 0} queued scans · index ${s.indexComplete ? 'complete' : 'filling'} · ${s.promoted ?? 0} promoted`;
   return JSON.stringify(s).slice(0, 120);
@@ -105,13 +107,13 @@ export default async function AdminPage() {
             <tbody>
               {o.jobs.map((j) => {
                 const stale = j.last_run ? now - Date.parse(j.last_run) > STALE_MS : true;
-                const bad = j.status === 'error' || j.status === 'exhausted';
+                const bad = j.status === 'error' || j.status === 'exhausted' || j.status === 'critical';
                 return (
                   <tr key={j.job} className="border-t border-line-soft align-top">
                     <td className="py-2 pr-3 font-mono">{j.job}</td>
                     <td className={`py-2 pr-3 ${stale && j.job.startsWith('ingest') ? 'font-semibold text-high-fg' : ''}`}>{j.last_run ? timeAgo(j.last_run) : 'never'}</td>
                     <td className="py-2 pr-3">
-                      <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${bad ? 'bg-high-bg text-high-fg' : j.status === 'partial' ? 'bg-caution-bg text-caution-fg' : 'bg-low-bg'}`}>
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-bold ${bad ? 'bg-high-bg text-high-fg' : j.status === 'partial' || j.status === 'warning' || j.status === 'daily limit reached' ? 'bg-caution-bg text-caution-fg' : 'bg-low-bg'}`}>
                         {j.status ?? '–'}
                       </span>
                     </td>

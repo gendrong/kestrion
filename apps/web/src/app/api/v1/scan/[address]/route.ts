@@ -13,12 +13,13 @@ import { apiAccess, apiKeyFrom } from '@/lib/apiAuth';
 import { getDb } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
 import { currentUser, sameOrigin } from '@/lib/session';
+import { isWriteQuotaError, PAUSED_MESSAGE, withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
 const COOLDOWN_MS = 10 * 60_000;
 
-export async function POST(req: Request, { params }: { params: Promise<{ address: string }> }) {
+export const POST = withPausedWrites(async function postHandler(req: Request, { params }: { params: Promise<{ address: string }> }) {
   const address = normalizeAddress((await params).address);
   if (!address) return apiError(400, 'invalid_address', 'Expected a token address: 0x followed by 40 hex characters.');
   const db = getDb();
@@ -49,7 +50,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ address
       { status: 202, headers: { 'Cache-Control': 'no-store', ...limit.headers } },
     );
   } catch (e) {
+    if (isWriteQuotaError(e)) return apiError(503, 'unavailable', PAUSED_MESSAGE, { 'Retry-After': '3600' });
     console.error('[api/scan]', e);
     return apiError(500, 'internal_error', 'Something went wrong. Please try again.');
   }
-}
+});

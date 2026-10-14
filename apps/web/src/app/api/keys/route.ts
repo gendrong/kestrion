@@ -7,6 +7,7 @@ import { createApiKey, listApiKeys, MAX_API_KEYS, revokeApiKey } from '@kestrion
 import { getDb } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
 import { currentUser, hashToken, newSessionToken, sameOrigin } from '@/lib/session';
+import { withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,13 +19,13 @@ async function signedIn() {
   return db && user ? { db, user } : null;
 }
 
-export async function GET() {
+export const GET = withPausedWrites(async function getHandler() {
   const s = await signedIn();
   if (!s) return reply(401, { error: 'Sign in to manage API keys' });
   return reply(200, { keys: await listApiKeys(s.db, s.user.wallet), max: MAX_API_KEYS });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withPausedWrites(async function postHandler(req: Request) {
   if (!sameOrigin(req)) return reply(403, { error: 'Forbidden' });
   const limit = await rateLimit('enqueue', req.headers);
   if (!limit.ok) return reply(429, { error: 'Too many requests' });
@@ -37,9 +38,9 @@ export async function POST(req: Request) {
   const id = await createApiKey(s.db, s.user, await hashToken(key), key.slice(0, 9), name || 'API key');
   if (id === null) return reply(409, { error: `You already have ${MAX_API_KEYS} keys. Revoke one first.` });
   return reply(200, { key, id });
-}
+});
 
-export async function DELETE(req: Request) {
+export const DELETE = withPausedWrites(async function deleteHandler(req: Request) {
   if (!sameOrigin(req)) return reply(403, { error: 'Forbidden' });
   const s = await signedIn();
   if (!s) return reply(401, { error: 'Sign in to manage API keys' });
@@ -47,4 +48,4 @@ export async function DELETE(req: Request) {
   const id = Number(body.id);
   if (!Number.isInteger(id) || id <= 0) return reply(400, { error: 'Malformed request' });
   return reply((await revokeApiKey(s.db, s.user.wallet, id)) ? 200 : 404, { revoked: true });
-}
+});

@@ -4,13 +4,14 @@ import { normalizeAddress } from '@/lib/address';
 import { getDb } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
 import { currentUser, sameOrigin } from '@/lib/session';
+import { withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
 const reply = (status: number, body: Record<string, unknown>) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 const TYPES: FlagType[] = ['false_positive', 'missed_risk'];
 
-export async function POST(req: Request) {
+export const POST = withPausedWrites(async function postHandler(req: Request) {
   if (!sameOrigin(req)) return reply(403, { error: 'Forbidden' });
   const db = getDb();
   const user = await currentUser(db);
@@ -25,4 +26,4 @@ export async function POST(req: Request) {
   if (!(await isScanned(db, token))) return reply(404, { error: 'This token has no report' });
   await createFlag(db, user, token, type, typeof body?.note === 'string' ? body.note : null);
   return reply(200, { ok: true });
-}
+});

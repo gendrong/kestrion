@@ -3,10 +3,11 @@ import { saveNonce } from '@kestrion/db';
 import { generateSiweNonce } from 'viem/siwe';
 import { getDb } from '@/lib/db';
 import { rateLimit } from '@/lib/rateLimit';
+import { withPausedWrites } from '@/lib/paused';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export const GET = withPausedWrites(async function getHandler(req: Request) {
   const limit = await rateLimit('api', req.headers);
   if (!limit.ok) return Response.json({ error: 'Too many requests' }, { status: 429, headers: limit.headers });
   const db = getDb();
@@ -14,4 +15,4 @@ export async function GET(req: Request) {
   const nonce = generateSiweNonce();
   await saveNonce(db, nonce);
   return Response.json({ nonce }, { headers: { 'Cache-Control': 'no-store' } });
-}
+});

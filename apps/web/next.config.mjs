@@ -33,7 +33,8 @@ const CSP = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://*.walletconnect.com https://*.reown.com",
+  // Token logos come straight from these IPFS gateways (see components/TokenAvatar.tsx).
+  "img-src 'self' data: blob: https://ipfs.filebase.io https://4everland.io https://*.walletconnect.com https://*.reown.com",
   "font-src 'self' data:",
   `connect-src 'self' ${WALLET_CONNECT}${isDev ? ' ws: wss:' : ''}`,
   `frame-src ${WALLET_FRAMES}`,

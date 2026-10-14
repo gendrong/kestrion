@@ -42,7 +42,23 @@ import { errText } from './errors';
 import { extendIndex, indexDiscovered, launchIndexFor } from './launchIndex';
 import { processRescans, rescanDue } from './rescan';
 import { refreshHolderTiers } from './tiers';
-import { budget, env, lastError, loadBudget, log, newCtx, openDb, saveBudget, scanAndStore, started, timeLeft, type Outcome, type ScanEnv } from './runtime';
+import {
+  budget,
+  d1Usage,
+  env,
+  lastError,
+  loadBudget,
+  log,
+  newCtx,
+  openDb,
+  saveBudget,
+  saveD1Usage,
+  scanAndStore,
+  started,
+  timeLeft,
+  type Outcome,
+  type ScanEnv,
+} from './runtime';
 
 /** First run only: how far back to look (blocks). ~3,000 blocks ≈ 5 minutes. */
 const INITIAL_LOOKBACK = BigInt(process.env.INGEST_INITIAL_LOOKBACK_BLOCKS ?? 3_000);
@@ -303,12 +319,13 @@ async function main() {
   const pruned = await pruneOgImages(db).catch(() => 0);
   await pruneAuth(db).catch(() => {});
   await saveBudget(db);
+  await saveD1Usage(db);
   await setJobState(db, 'ingest:queue', {
     status: 'ok',
     error: null,
     stats: { processed: queued, walletLookups: lookups, promoted, rescanned, indexComplete, creditsLeft: budget.remaining, shareImagesPruned: pruned },
   });
-  log(`done (${(Date.now() - started) / 1000}s); explorer credits left: ${budget.remaining ?? 'unknown'}`);
+  log(`done (${(Date.now() - started) / 1000}s); explorer credits left: ${budget.remaining ?? 'unknown'}; D1 rows written this run: ${d1Usage.rowsWritten}`);
 }
 
 main().catch((e) => {

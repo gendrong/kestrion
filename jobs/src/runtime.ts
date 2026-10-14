@@ -195,6 +195,26 @@ export async function saveBudget(db: Db) {
   }).catch(() => {});
 }
 
+/** D1 usage of this run (from D1's own per-statement numbers). */
+export const d1Usage = { rowsRead: 0, rowsWritten: 0 };
+/** D1 free plan: rows written / read per day (reset 00:00 UTC). Source: https://developers.cloudflare.com/d1/platform/limits/ */
+export const D1_DAILY = { rowsWritten: 100_000, rowsRead: 5_000_000 };
+
+/** Add this run's usage to today's total (job_state 'd1:usage'), shown on /admin. Website writes aren't included. */
+export async function saveD1Usage(db: Db) {
+  const day = new Date().toISOString().slice(0, 10);
+  const s = await getJobState(db, 'd1:usage').catch(() => null);
+  const same = s?.stats.day === day;
+  const written = (same ? Number(s?.stats.rowsWritten ?? 0) : 0) + d1Usage.rowsWritten;
+  const read = (same ? Number(s?.stats.rowsRead ?? 0) : 0) + d1Usage.rowsRead;
+  const pct = Math.round((written / D1_DAILY.rowsWritten) * 100);
+  await setJobState(db, 'd1:usage', {
+    status: pct >= 90 ? 'critical' : pct >= 70 ? 'warning' : 'ok',
+    error: null,
+    stats: { day, rowsWritten: written, rowsRead: read, writtenPct: pct, limitWritten: D1_DAILY.rowsWritten, limitRead: D1_DAILY.rowsRead },
+  }).catch(() => {});
+}
+
 /** D1 over the Cloudflare REST API (the jobs run on GitHub, outside Cloudflare). */
 export function openDb(): Db {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
@@ -203,5 +223,13 @@ export function openDb(): Db {
   if (!accountId || !databaseId || !apiToken) {
     throw new Error('Database not configured: set CLOUDFLARE_ACCOUNT_ID, D1_DATABASE_ID and CLOUDFLARE_D1_TOKEN (or CLOUDFLARE_API_TOKEN).');
   }
-  return createD1HttpClient({ accountId, databaseId, apiToken });
+  return createD1HttpClient({
+    accountId,
+    databaseId,
+    apiToken,
+    onUsage: (u) => {
+      d1Usage.rowsRead += u.rowsRead;
+      d1Usage.rowsWritten += u.rowsWritten;
+    },
+  });
 }
