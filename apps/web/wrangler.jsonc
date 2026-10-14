@@ -37,7 +37,7 @@
 
   // Not secret. ADMIN_WALLETS: comma-separated wallets that may open /admin (empty = nobody).
   "vars": {
-    "ADMIN_WALLETS": ""
+    "ADMIN_WALLETS": "0x0700d4e623b918843cb05a0b36d0bc31b827f80a"
   },
 
   "observability": {
