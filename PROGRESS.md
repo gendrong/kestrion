@@ -241,6 +241,10 @@
   notifications. Remaining backfill (~300k launches) ≈ 2 weeks; until then creator history for old launches is marked
   "may be incomplete".
 - `/admin` no longer counts every index row (COUNT(*) on 500k rows burns the 5M rows-read/day quota).
+- Quota savers (same day): token logos load from allowlisted IPFS gateways in the browser (no Worker request per
+  logo, ~5× more visits fit in the 100k requests/day), feed refresh every 2 min, writing routes answer 503
+  "paused" when D1 refuses writes, jobs record D1 rows read/written per UTC day (`d1:usage`, shown on /admin with
+  warning ≥70% / critical ≥90%; website writes not included).
 
 ## Next
 - Phase 5 live test by the owner (sign in → watch → Actions "rescan-test"); WalletConnect project ID.
