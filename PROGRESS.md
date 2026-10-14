@@ -232,6 +232,16 @@
 - Tests: tier rule, threshold units, Holder limits, falling back to Free (37 db tests).
 - Launch-day checklist: `docs/KEST-LAUNCH.md`.
 
+## Incident 2026-10-14: D1 daily write limit
+- The launch-index backfill wrote ~500k launches (each ≈ 2 rows) and used the free D1 quota (100,000 rows written per
+  day, reset 00:00 UTC) within ~30 minutes after the reset. From ~00:37 UTC every ingest run failed at its first write
+  ("exceeded D1's free tier daily row write limit"); the feed stopped until the next reset.
+- **Decision (owner):** stay free, fill the index slowly. The backfill now uses at most 20,000 launches per UTC day
+  (`BACKFILL_LAUNCHES_PER_DAY`, job_state `index:budget`), leaving ~60,000 rows/day for scans, rescans and
+  notifications. Remaining backfill (~300k launches) ≈ 2 weeks; until then creator history for old launches is marked
+  "may be incomplete".
+- `/admin` no longer counts every index row (COUNT(*) on 500k rows burns the 5M rows-read/day quota).
+
 ## Next
 - Phase 5 live test by the owner (sign in → watch → Actions "rescan-test"); WalletConnect project ID.
 - Confirm Phase 4 once the launch index is complete.

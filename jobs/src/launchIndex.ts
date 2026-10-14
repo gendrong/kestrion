@@ -8,9 +8,16 @@ import { getJobState, insertLaunches, launchesByDeployers, setJobState, type Db,
 import type { DiscoveredLaunch, EngineContext, LaunchIndex, PonsAdapter, PriorLaunchRef } from '@kestrion/engine';
 import { errText } from './errors';
 
-/** Blocks per step (the RPC answers ≤ 20k per eth_getLogs, so ~10 calls), and steps read in parallel (1: the public RPC answers 403 to bursts). */
+/** Blocks per step (the RPC answers ≤ 20k per eth_getLogs, so ~10 calls; one step at a time: the public RPC answers 403 to bursts). */
 const WINDOW = 200_000n;
-const PARALLEL = 1;
+/**
+ * D1's free tier allows 100,000 rows written per day (each launch ≈ 2 rows: the row + the deployer index). The
+ * backfill may use this many launches per UTC day; the rest is left for scans (seen 2026-10-14: an unthrottled
+ * backfill used the whole day's quota in ~30 minutes and every later write failed until midnight UTC).
+ */
+export const BACKFILL_LAUNCHES_PER_DAY = Number(process.env.INGEST_INDEX_LAUNCHES_PER_DAY ?? 20_000);
+const BUDGET_JOB = 'index:budget';
+
 /** A factory counts as fully indexed when its cursor is this close to the head (one run's worth of blocks). */
 const CAUGHT_UP = 30_000n;
 
@@ -63,29 +70,39 @@ export async function extendIndex(
   log: (m: string) => void,
 ): Promise<boolean> {
   let complete = true;
+  // Today's write budget for the backfill (deadline 0 = only report completeness, write nothing).
+  const day = new Date().toISOString().slice(0, 10);
+  const b = deadline > 0 ? await getJobState(db, BUDGET_JOB).catch(() => null) : null;
+  let used = b?.stats.day === day && typeof b.stats.used === 'number' ? b.stats.used : 0;
+  const remaining = () => BACKFILL_LAUNCHES_PER_DAY - used;
   for (const f of adapter.factories) {
     const end = f.endBlock ?? latest;
     const state = await getJobState(db, jobOf(f.id));
     let cursor = state?.last_block != null ? BigInt(state.last_block) : f.startBlock - 1n;
     let added = 0;
-    while (cursor < end && Date.now() < deadline) {
-      const steps: [bigint, bigint][] = [];
-      for (let from = cursor + 1n; steps.length < PARALLEL && from <= end; from += WINDOW) {
-        steps.push([from, from + WINDOW - 1n > end ? end : from + WINDOW - 1n]);
-      }
+    while (cursor < end && Date.now() < deadline && remaining() > 0) {
+      const from = cursor + 1n;
+      const to = from + WINDOW - 1n > end ? end : from + WINDOW - 1n;
       try {
-        const found = await Promise.all(steps.map(([a, b]) => adapter.discoverLaunches(f.id, a, b).then((l) => ({ a, b, l }))));
-        for (const s of found) {
-          // Times are a nice-to-have: a failed block read must not stop the backfill.
-          const times = await estimateTimes(ctx, s.a, s.b, s.l).catch(() => new Map<string, string>());
-          await insertLaunches(db, s.l.map((l) => toRow(l, times.get(l.token.toLowerCase()) ?? null)));
-          added += s.l.length;
+        const found = (await adapter.discoverLaunches(f.id, from, to)).sort((x, y) => (x.blockNumber < y.blockNumber ? -1 : x.blockNumber > y.blockNumber ? 1 : 0));
+        // Over today's budget: store the first ones and stop just before the first one left out.
+        let take = found;
+        let next = to;
+        if (found.length > remaining()) {
+          take = found.slice(0, remaining());
+          next = found[remaining()]!.blockNumber - 1n;
         }
-        cursor = steps[steps.length - 1]![1];
+        // Times are a nice-to-have: a failed block read must not stop the backfill.
+        const times = await estimateTimes(ctx, from, to, take).catch(() => new Map<string, string>());
+        await insertLaunches(db, take.map((l) => toRow(l, times.get(l.token.toLowerCase()) ?? null)));
+        added += take.length;
+        used += take.length;
+        cursor = next;
         await setJobState(db, jobOf(f.id), { last_block: Number(cursor), status: cursor >= end ? 'ok' : 'partial', error: null, stats: { added } });
+        await setJobState(db, BUDGET_JOB, { status: remaining() > 0 ? 'ok' : 'daily limit reached', error: null, stats: { day, used, limit: BACKFILL_LAUNCHES_PER_DAY } });
       } catch (e) {
         const msg = errText(e);
-        log(`index ${f.id}: ERROR at block ${steps[0]?.[0]}: ${msg}`);
+        log(`index ${f.id}: ERROR at block ${from}: ${msg}`);
         await setJobState(db, jobOf(f.id), { status: 'error', error: msg.slice(0, 500) }).catch(() => {});
         break;
       }

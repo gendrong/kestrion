@@ -149,7 +149,8 @@ export async function adminOverview(db: Db): Promise<AdminOverview> {
                    (SELECT COUNT(*) FROM scan_requests WHERE status = 'failed') AS failed,
                    (SELECT COUNT(*) FROM users) AS users,
                    (SELECT COUNT(*) FROM flags WHERE status = 'open') AS open_flags,
-                   (SELECT COUNT(*) FROM launch_index) AS indexed`,
+                   -- MAX(rowid) ≈ row count without reading every row (D1 bills rows read; the index has 500k+).
+                   (SELECT MAX(rowid) FROM launch_index) AS indexed`,
       params: [dayAgo],
     },
   ]);
