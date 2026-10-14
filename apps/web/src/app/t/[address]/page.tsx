@@ -111,7 +111,16 @@ async function Body({ address }: { address: string | null }) {
 
   const limit = await rateLimit('enqueue', await headers());
   if (!limit.ok) return <Message title="Too many requests">You asked for many new scans in a short time. Please wait a minute and try again.</Message>;
-  const request = await enqueueScan(db, address);
+  // Queueing needs a database write; when that fails (e.g. the free daily write quota is used up) say so plainly.
+  const request = await enqueueScan(db, address).catch((e) => (console.error('[t] enqueue', e), null));
+  if (!request) {
+    return (
+      <Message title="New scans are paused for a moment">
+        This token has no report yet and we can&apos;t queue new scans right now. Please try again in a few hours. Existing
+        reports and the live feed stay available.
+      </Message>
+    );
+  }
   // The scanner found it is a wallet, not a token.
   if (request.status === 'not_a_launch' && request.error === WALLET_MARK) redirect(`/creator/${address}`);
   if (request.status === 'not_a_launch') {

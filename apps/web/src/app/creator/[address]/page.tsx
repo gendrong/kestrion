@@ -247,7 +247,14 @@ async function Body({ address }: { address: string | null }) {
 
   const limit = await rateLimit('enqueue', await headers());
   if (!limit.ok) return <Message title="Too many requests">You looked up many new wallets in a short time. Please wait a minute and try again.</Message>;
-  const request = await enqueueCreatorLookup(db, address);
+  const request = await enqueueCreatorLookup(db, address).catch((e) => (console.error('[creator] enqueue', e), null));
+  if (!request) {
+    return (
+      <Message title="Wallet lookups are paused for a moment">
+        We haven&apos;t seen this wallet launch a token yet and can&apos;t start a lookup right now. Please try again in a few hours.
+      </Message>
+    );
+  }
   if (request.status === 'no_launches') {
     return (
       <Message title="No Pons launches found for this wallet">
