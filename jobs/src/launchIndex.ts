@@ -11,11 +11,12 @@ import { errText } from './errors';
 /** Blocks per step (the RPC answers ≤ 20k per eth_getLogs, so ~10 calls; one step at a time: the public RPC answers 403 to bursts). */
 const WINDOW = 200_000n;
 /**
- * D1's free tier allows 100,000 rows written per day (each launch ≈ 2 rows: the row + the deployer index). The
+ * D1's free tier allows 100,000 rows written per day (each launch ≈ 3 rows: the row + its token and deployer indexes,
+ * measured 2026-10-16). The
  * backfill may use this many launches per UTC day; the rest is left for scans (seen 2026-10-14: an unthrottled
  * backfill used the whole day's quota in ~30 minutes and every later write failed until midnight UTC).
  */
-export const BACKFILL_LAUNCHES_PER_DAY = Number(process.env.INGEST_INDEX_LAUNCHES_PER_DAY ?? 20_000);
+export const BACKFILL_LAUNCHES_PER_DAY = Number(process.env.INGEST_INDEX_LAUNCHES_PER_DAY ?? 10_000);
 const BUDGET_JOB = 'index:budget';
 
 /** A factory counts as fully indexed when its cursor is this close to the head (one run's worth of blocks). */

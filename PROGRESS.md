@@ -236,7 +236,8 @@
 - The launch-index backfill wrote ~500k launches (each ≈ 2 rows) and used the free D1 quota (100,000 rows written per
   day, reset 00:00 UTC) within ~30 minutes after the reset. From ~00:37 UTC every ingest run failed at its first write
   ("exceeded D1's free tier daily row write limit"); the feed stopped until the next reset.
-- **Decision (owner):** stay free, fill the index slowly. The backfill now uses at most 20,000 launches per UTC day
+- **Decision (owner):** stay free, fill the index slowly. The backfill now uses at most 10,000 launches per UTC day
+  (lowered from 20,000 on 2026-10-16: each launch costs ~3 written rows, and 20k + scans reached ~94k/day)
   (`BACKFILL_LAUNCHES_PER_DAY`, job_state `index:budget`), leaving ~60,000 rows/day for scans, rescans and
   notifications. Remaining backfill (~300k launches) ≈ 2 weeks; until then creator history for old launches is marked
   "may be incomplete".
